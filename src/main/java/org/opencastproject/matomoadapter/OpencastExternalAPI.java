@@ -21,18 +21,20 @@
 
 package org.opencastproject.matomoadapter;
 
+import io.reactivex.Flowable;
+import okhttp3.ResponseBody;
+import retrofit2.Response;
+import retrofit2.http.GET;
+import retrofit2.http.Header;
+import retrofit2.http.Path;
+
 /**
- * Indicates a syntax error while parsing Matomo's JSON response
+ * Retrofit interface for the external Opencast API
  */
-public final class MatomoJsonSyntaxException extends RuntimeException {
-  private final String json;
-
-  MatomoJsonSyntaxException(final String json) {
-    super("error parsing json");
-    this.json = json;
-  }
-
-  public String getJson() {
-    return this.json;
-  }
+@SuppressWarnings("InterfaceMayBeAnnotatedFunctional")
+public interface OpencastExternalAPI {
+  @GET("/api/events/{eventId}")
+  Flowable<Response<ResponseBody>> getEvent(
+          @Path("eventId") String eventId,
+          @Header("Authorization") String authorization);
 }

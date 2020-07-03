@@ -24,12 +24,8 @@ package org.opencastproject.matomoadapter;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -39,56 +35,10 @@ import okhttp3.ResponseBody;
 import retrofit2.Response;
 
 /**
- * Various utility functions for Matomo API requests.
+ * Various utility functions for Opencast
  */
-public final class MatomoUtils {
-
-  private MatomoUtils() {
-  }
-
-  /**
-   * Convert response JSON String to ArrayList.
-   *
-   * @param json Response body from Matomo API request
-   * @return ArrayList with separate JSONObjects containing statistics for each episode
-   */
-  private static ArrayList<JSONObject> getResourcesJson(final String json) {
-    try{
-      final JSONArray jArray = new JSONArray(json);
-      final ArrayList<JSONObject> list = new ArrayList<>();
-      if (jArray.length() != 0) {
-        for (int i = 0; i < jArray.length(); i++) {
-          list.add(jArray.getJSONObject(i));
-        }
-      }
-      return list;
-    } catch (final JSONException e) {
-      throw new ParsingJsonSyntaxException(json);
-    }
-  }
-
-  /**
-   * Invoke a request to the Matomo MediaAnalytics.getVideoResources API.
-   *
-   * @param logger Logger Object from Main
-   * @param client Matomo client instance
-   * @param idSite Site ID from config file
-   * @param token Auth token for Matomo API from config file
-   * @param hour Server time; acts as time frame for the request (all views since)
-   * @return Returns Flowable with JSONObjects containing episode statistics
-   */
-  public static Flowable<JSONObject> getResources(
-          final Logger logger,
-          final MatomoClient client,
-          final String idSite,
-          final String token,
-          final String hour) {
-    logger.info("Retrieving resources");
-    return client
-            .getResourcesRequest(idSite, token, hour)
-            .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
-            .map(MatomoUtils::getResourcesJson)
-            .flatMapIterable(json -> json);
+public final class OpencastUtils {
+  private OpencastUtils() {
   }
 
   /**
@@ -98,11 +48,11 @@ public final class MatomoUtils {
    * @return Either a series ID or <code>Optional.empty()</code>
    */
   @SuppressWarnings("unchecked")
-  private static Optional<String> getVersionJson(final String eventJson) {
+  private static Optional<String> seriesForEventJson(final String eventJson) {
     try {
       final Map<String, Object> m = new Gson().fromJson(eventJson, Map.class);
       if (m != null) {
-        final Object isPartOf = m.get("value");
+        final Object isPartOf = m.get("is_part_of");
         if (isPartOf instanceof String) {
           return Optional.of((String) isPartOf);
         }
@@ -122,7 +72,7 @@ public final class MatomoUtils {
    * @param organization      The episode's organization
    * @param episodeId         The episode ID
    * @return Either a singleton <code>Flowable</code> with the resulting series ID, or an empty <code>Flowable</code>
-   *
+   */
   private static Flowable<String> seriesForEvent(
           final Logger logger,
           final boolean seriesAreOptional,
@@ -132,33 +82,13 @@ public final class MatomoUtils {
     logger.info("Retrieving series for organization \"{}\", episode \"{}\"...", organization, episodeId);
     return client
             .getRequest(organization, episodeId)
-            .concatMap(body -> OpencastUtils.checkResponseCode2(logger, body, organization, episodeId))
+            .concatMap(body -> OpencastUtils.checkResponseCode(logger, body, organization, episodeId))
             .map(OpencastUtils::seriesForEventJson)
             .concatMap(series -> {
               if (series.isPresent())
                 return Flowable.just(series.get());
               if (!seriesAreOptional)
                 logger.error("OCNOSERIES, episode \"{}\", organization \"{}\"", episodeId, organization);
-              return Flowable.just("");
-            });
-  }
-  */
-
-  public static Flowable<String> getVersion(
-          final Logger logger,
-          final MatomoClient client,
-          final String source,
-          final String token,
-          final String idSite,
-          final String format) {
-    logger.info("Retrieving version");
-    return client
-            .getSegmentsRequest(idSite, token, source)
-            .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
-            .map(MatomoUtils::getVersionJson)
-            .concatMap(value -> {
-              if (value.isPresent())
-                return Flowable.just(value.get());
               return Flowable.just("");
             });
   }
@@ -169,7 +99,7 @@ public final class MatomoUtils {
    * @param x The HTTP response we got
    * @param logger Logger for errors
    * @return An empty <code>Flowable</code> if it's an invalid HTTP response, or a singleton <code>Flowable</code> containing the body as a string
-   *
+   */
   private static Flowable<String> checkResponseCode(
           final Logger logger,
           final Response<? extends ResponseBody> x,
@@ -185,28 +115,6 @@ public final class MatomoUtils {
             Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string()) :
             Flowable.error(new InvalidOpencastResponse(x.code()));
   }
-  */
-
-  /**
-   * Filter out invalid HTTP requests
-   *
-   * @param x The HTTP response we got
-   * @param logger Logger for errors
-   * @return An empty <code>Flowable</code> if it's an invalid HTTP response, or a singleton <code>Flowable</code> containing the body as a string
-   */
-  private static Flowable<String> checkResponseCode(
-          final Logger logger,
-          final Response<? extends ResponseBody> x) {
-    final boolean correctResponse = x.code() / 200 == 1;
-    if (!correctResponse) {
-      logger.error("Fehlerhafter code: {}", x.code());
-    } else {
-      logger.debug("OCHTTPSUCCESS");
-    }
-    return correctResponse ?
-            Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string()) :
-            Flowable.error(new InvalidMatomoResponse(x.code()));
-  }
 
   /**
    * Create a resolved {@link Impression} from a {@link RawImpression} and Opencast metadata
@@ -216,7 +124,7 @@ public final class MatomoUtils {
    * @param client         The Opencast client to use
    * @param rawImpression  The raw impression to convert
    * @return An empty <code>Flowable</code> if the conversion failed, or a singleton <code>Flowable</code> containing the converted {@link Impression}
-   *
+   */
   public static Flowable<? extends Impression> makeImpression(
           @SuppressWarnings("SameParameterValue") final Logger logger,
           final OpencastConfig opencastConfig,
@@ -231,5 +139,4 @@ public final class MatomoUtils {
             rawImpression.getOrganizationId(),
             rawImpression.getEpisodeId()).flatMap(series -> Flowable.just(rawImpression.toImpression(series)));
   }
-  */
 }

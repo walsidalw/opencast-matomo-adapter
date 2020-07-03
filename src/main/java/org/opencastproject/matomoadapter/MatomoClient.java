@@ -21,14 +21,7 @@
 
 package org.opencastproject.matomoadapter;
 
-//import com.google.common.cache.Cache;
-//import com.google.common.cache.CacheBuilder;
-
 import org.slf4j.LoggerFactory;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
 
 import devcsrj.okhttp3.logging.HttpLoggingInterceptor;
 import io.reactivex.Flowable;
@@ -45,39 +38,11 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 public final class MatomoClient {
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(MatomoClient.class);
 
-  /*
-   * TODO: Figure out how to use cache to store responds
-   */
-  public static final class CacheKey {
-    private final String organizationId;
-    private final String episodeId;
-
-    public CacheKey(final String organizationId, final String episodeId) {
-      this.organizationId = organizationId;
-      this.episodeId = episodeId;
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-      if (this == o)
-        return true;
-      if (o == null || getClass() != o.getClass())
-        return false;
-      final CacheKey cacheKey = (CacheKey) o;
-      return this.organizationId.equals(cacheKey.organizationId) && this.episodeId.equals(cacheKey.episodeId);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(this.organizationId, this.episodeId);
-    }
-  }
-
   private final MatomoConfig matomoConfig;
   private final OkHttpClient client;
 
   /**
-   * Create the client
+   * Create the client.
    *
    * @param matomoConfig Matomo configuration
    */
@@ -87,10 +52,6 @@ public final class MatomoClient {
     this.client = new OkHttpClient.Builder().addInterceptor(interceptor).build();
   }
 
-  private String getRawAddress() {
-    return this.matomoConfig.getUri();
-  }
-
   /**
    * Create a separate endpoint (meaning HTTP interface) for each organization
    *
@@ -98,7 +59,7 @@ public final class MatomoClient {
    */
   private MatomoExternalAPI getClient() {
     final Retrofit retrofit = new Retrofit.Builder()
-            .baseUrl(getRawAddress())
+            .baseUrl(this.matomoConfig.getUri())
             .client(this.client)
             .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
             .build();
@@ -106,21 +67,24 @@ public final class MatomoClient {
   }
 
   /**
-   * Request episode metadata from Opencast
+   * Send a HTTP GET request to the Matomo MediaAnalytics.getVideoResources API. The expected response
+   * is a JSONArray containing all relevant statistical data for every episode played at least once in
+   * the time frame between (server) hour and now.
    *
-   * @param organization Organization (tenant) for the episode
-   * @param episodeId    The episode's ID (usually a UUID)
-   * @return A <code>Flowable</code> with the response body
+   * @param idSite Site ID from the config file
+   * @param token Auth token for Matomo API from the config file
+   * @param hour Server time; acts as time frame for the request (all views since)
+   * @return Raw response to the request
    */
-  public Flowable<Response<ResponseBody>> getRequest(final String method, final String token,
-                                                     final String idSite, final String format) {
-    final Flowable<Response<ResponseBody>> requestUncached = getRequestUncached(method, token, idSite, format);
-    return requestUncached;
+  public Flowable<Response<ResponseBody>> getResourcesRequest(final String idSite, final String token,
+                                                              final String hour) {
+    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoResources, time: {}", hour);
+    return getClient().getResources(idSite, token, hour);
   }
 
-  private Flowable<Response<ResponseBody>> getRequestUncached(final String method, final String token,
-                                                              final String idSite, final String format) {
-    LOGGER.debug("MATOMOREQUESTSTART, method {}", method);
-    return getClient().getDetails(method, token, idSite, format);
+  public Flowable<Response<ResponseBody>> getSegmentsRequest(final String idSite, final String token,
+          final String source) {
+    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoSegments, episodeId: {}", source);
+    return getClient().getSegments(idSite, token, source);
   }
 }

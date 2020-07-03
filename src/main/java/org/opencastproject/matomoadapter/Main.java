@@ -25,6 +25,7 @@ package org.opencastproject.matomoadapter;
 
 import org.influxdb.InfluxDB;
 import org.influxdb.InfluxDBIOException;
+import org.json.JSONObject;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
@@ -65,10 +66,16 @@ public class Main {
       // Create a Matomo HTTP client (this might be a nop, if no Matomo token is given)
       final MatomoClient matClient = new MatomoClient(configFile.getMatomoConfig());
 
+      /*
       Flowable<String> code = MatomoUtils.getVersion(LOGGER, matClient, "API.getMatomoVersion",
               configFile.getMatomoConfig().getToken(), configFile.getMatomoConfig().getSiteId(), "json");
 
       code.blockingSubscribe(p -> System.out.println(p), 2048);
+      */
+
+      Flowable<JSONObject> code = MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
+              configFile.getMatomoConfig().getToken(), "visitServerHour==12");
+      code.blockingSubscribe(p -> System.out.println("Plays: " + p.getInt("nb_plays")), 2048);
 
     } catch (final MatomoClientConfigurationException e) {
 
