@@ -47,13 +47,13 @@ import io.reactivex.BackpressureStrategy;
 import io.reactivex.Flowable;
 
 
-public class Main {
+public final class Main {
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
   private Main() {
   }
 
-  public static void main(String[] args) {
+  public static void main(final String[] args) {
     // Preliminaries: command line parsing, config file parsing
     final CommandLine commandLine = CommandLine.parse(args);
     final ConfigFile configFile = ConfigFile.readFile(commandLine.getConfigFile());
@@ -75,9 +75,11 @@ public class Main {
                       Main::processError,
                       2048);
 
-      Flowable<JSONObject> code = MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
+
+
+      /*Flowable<JSONObject> code = MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
               configFile.getMatomoConfig().getToken(), "visitServerHour==12");
-      code.blockingSubscribe(p -> System.out.println("Plays: " + p.getInt("nb_plays")), 2048);
+      code.blockingSubscribe(p -> System.out.println("Plays: " + p.getInt("nb_plays")), 2048);*/
 
     } catch (final MatomoClientConfigurationException e) {
 

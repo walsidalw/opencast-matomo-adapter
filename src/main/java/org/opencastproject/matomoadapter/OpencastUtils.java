@@ -70,7 +70,6 @@ public final class OpencastUtils {
    * Request metadata for the episode and return the corresponding series ID
    *
    * @param logger            Logger to use
-   * @param seriesAreOptional Whether series are optional for an episode
    * @param client            Opencast HTTP client instance to use
    * @param organization      The episode's organization
    * @param episodeId         The episode ID
@@ -132,8 +131,10 @@ public final class OpencastUtils {
       final OffsetDateTime date = OffsetDateTime.now();
 
       // Create new Impression Flowable
-      return seriesForEvent(logger, client, "org", eventId)
-              .flatMap(series -> Flowable.just(new Impression(eventId, "org", series, plays, visits, finishes, date)));
+      //return seriesForEvent(logger, client, "org", eventId)
+      //        .flatMap(series -> Flowable.just(new Impression(eventId, "org", series, plays, visits, finishes, date)));
+
+      return Flowable.just(new Impression(eventId, "org", "", plays, visits, finishes, date));
 
     } catch (final JSONException e) {
       throw new ParsingJsonSyntaxException(json.toString());
