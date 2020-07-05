@@ -39,7 +39,11 @@ public final class ExitStatuses {
   /**
    * There was an error configuring one (maybe the only) Opencast client
    */
-  public static final int OPENCAST_CLIENT_CONFIGURATION_ERROR = 4;
+  public static final int MATOMO_CLIENT_CONFIGURATION_ERROR = 4;
+  /**
+   * There was an error configuring one (maybe the only) Opencast client
+   */
+  public static final int OPENCAST_CLIENT_CONFIGURATION_ERROR = 5;
   /**
    * InfluxDB raised a run-time error (connection lost, or something)
    */
@@ -55,7 +59,7 @@ public final class ExitStatuses {
   /**
    * The JSON file returned by the external API wasn't valid
    */
-  public static final int OPENCAST_JSON_SYNTAX_ERROR = 8;
+  public static final int JSON_SYNTAX_ERROR = 8;
   /**
    * Some random exception flew by us
    */

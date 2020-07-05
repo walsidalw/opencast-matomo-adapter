@@ -21,8 +21,6 @@
 
 package org.opencastproject.matomoadapter;
 
-//import com.github.davidmoten.rx2.file.Files;
-
 import org.influxdb.InfluxDB;
 import org.influxdb.InfluxDBIOException;
 import org.json.JSONObject;
@@ -84,6 +82,11 @@ public final class Main {
     } catch (final MatomoClientConfigurationException e) {
 
       LOGGER.error("Matomo configuration error: ", e);
+      System.exit(ExitStatuses.MATOMO_CLIENT_CONFIGURATION_ERROR);
+
+    } catch (final OpencastClientConfigurationException e) {
+
+      LOGGER.error("Opencast configuration error: ", e);
       System.exit(ExitStatuses.OPENCAST_CLIENT_CONFIGURATION_ERROR);
 
     } catch (final InfluxDBIOException e) {
@@ -107,12 +110,15 @@ public final class Main {
       LOGGER.error("Log file \"" + e.getMessage() + "\" not found", e);
       System.exit(ExitStatuses.LOG_FILE_NOT_FOUND);
     } else if (e instanceof ParsingJsonSyntaxException) {
-      LOGGER.error("Couldn't parse Opencast's json: " + ((ParsingJsonSyntaxException) e).getJson(), e);
-      System.exit(ExitStatuses.OPENCAST_JSON_SYNTAX_ERROR);
+      LOGGER.error("Couldn't parse json: " + ((ParsingJsonSyntaxException) e).getJson(), e);
+      System.exit(ExitStatuses.JSON_SYNTAX_ERROR);
     } else if (e instanceof OpencastClientConfigurationException) {
       LOGGER.error("Opencast configuration error:", e);
       System.exit(ExitStatuses.OPENCAST_CLIENT_CONFIGURATION_ERROR);
-    } else {
+    } else if (e instanceof MatomoClientConfigurationException) {
+      LOGGER.error("Matomo configuration error:", e);
+      System.exit(ExitStatuses.MATOMO_CLIENT_CONFIGURATION_ERROR);
+    }else {
       LOGGER.error("Error:", e);
     }
     System.exit(ExitStatuses.UNKNOWN);

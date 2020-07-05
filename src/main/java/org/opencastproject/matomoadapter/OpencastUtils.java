@@ -115,6 +115,16 @@ public final class OpencastUtils {
             Flowable.error(new InvalidOpencastResponse(x.code()));
   }
 
+  /**
+   * Extracts eventId and statistical data from a JSON Object received from Matomo.
+   * Subsequently, the Opencast Event API is called for relevant series information (seriesID).
+   * Finally, all required data is saved and returned within an Impression Object.
+   *
+   * @param logger Logger from the main method
+   * @param client Opencast client used for the event API request
+   * @param json JSON object representing one video and its statistics
+   * @return Completed Impression, ready to be converted to a InfluxDB point
+   */
   public static Flowable<Impression> makeImpression(
           @SuppressWarnings("SameParameterValue") final Logger logger,
           final OpencastClient client,
@@ -130,7 +140,7 @@ public final class OpencastUtils {
       final int finishes = json.getInt("nb_finishes");
       final OffsetDateTime date = OffsetDateTime.now();
 
-      // Create new Impression Flowable
+      // Create new Impression Flowable with series data from Opencast
       //return seriesForEvent(logger, client, "org", eventId)
       //        .flatMap(series -> Flowable.just(new Impression(eventId, "org", series, plays, visits, finishes, date)));
 
@@ -141,6 +151,13 @@ public final class OpencastUtils {
     }
   }
 
+  /**
+   * Parses the video URL to find the eventID. Currently the most common URL-types, coming from the
+   * Theodul player are supported.
+   *
+   * @param label Sub-URL of the video
+   * @return The eventID parsed from the URL
+   */
   private static String getEventJson(final String label) {
     final String sub = label.substring(1, 7);
 

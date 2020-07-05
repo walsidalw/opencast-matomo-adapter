@@ -1,3 +1,1 @@
 Opencast-Matomo-Adapter
-
-&token_auth=9d934d6a98db43036314ce4bc9a88365

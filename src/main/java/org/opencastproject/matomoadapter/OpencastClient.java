@@ -84,13 +84,4 @@ public final class OpencastClient {
     final String userAndPassBase64 = Base64.getEncoder().encodeToString(userAndPass.getBytes(StandardCharsets.UTF_8));
     return "Basic " + userAndPassBase64;
   }
-
-  /**
-   * Check if we even need an Opencast request
-   *
-   * @return <code>true</code> if we have an Opencast External API configuration, otherwise <code>false</code>
-   */
-  public boolean isUnavailable() {
-    return this.opencastConfig == null;
-  }
 }

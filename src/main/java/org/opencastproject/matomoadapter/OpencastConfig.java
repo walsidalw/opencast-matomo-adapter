@@ -21,8 +21,6 @@
 
 package org.opencastproject.matomoadapter;
 
-import java.time.Duration;
-
 /**
  * Represents all fields for Opencast's External API configuration (immutable)
  */
