@@ -24,8 +24,11 @@ package org.opencastproject.matomoadapter;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -75,20 +78,17 @@ public final class OpencastUtils {
    */
   private static Flowable<String> seriesForEvent(
           final Logger logger,
-          final boolean seriesAreOptional,
           final OpencastClient client,
           final String organization,
           final String episodeId) {
     logger.info("Retrieving series for organization \"{}\", episode \"{}\"...", organization, episodeId);
     return client
-            .getRequest(organization, episodeId)
+            .getEventRequest(organization, episodeId)
             .concatMap(body -> OpencastUtils.checkResponseCode(logger, body, organization, episodeId))
             .map(OpencastUtils::seriesForEventJson)
             .concatMap(series -> {
               if (series.isPresent())
                 return Flowable.just(series.get());
-              if (!seriesAreOptional)
-                logger.error("OCNOSERIES, episode \"{}\", organization \"{}\"", episodeId, organization);
               return Flowable.just("");
             });
   }
@@ -116,27 +116,38 @@ public final class OpencastUtils {
             Flowable.error(new InvalidOpencastResponse(x.code()));
   }
 
-  /**
-   * Create a resolved {@link Impression} from a {@link RawImpression} and Opencast metadata
-   *
-   * @param logger         The logger to use
-   * @param opencastConfig Opencast configuration
-   * @param client         The Opencast client to use
-   * @param rawImpression  The raw impression to convert
-   * @return An empty <code>Flowable</code> if the conversion failed, or a singleton <code>Flowable</code> containing the converted {@link Impression}
-   */
-  public static Flowable<? extends Impression> makeImpression(
+  public static Flowable<Impression> makeImpression(
           @SuppressWarnings("SameParameterValue") final Logger logger,
-          final OpencastConfig opencastConfig,
           final OpencastClient client,
-          final RawImpression rawImpression) {
-    if (client.isUnavailable())
-      return Flowable.just(rawImpression.toImpression(""));
-    return seriesForEvent(
-            logger,
-            opencastConfig == null || opencastConfig.isSeriesAreOptional(),
-            client,
-            rawImpression.getOrganizationId(),
-            rawImpression.getEpisodeId()).flatMap(series -> Flowable.just(rawImpression.toImpression(series)));
+          final JSONObject json) {
+
+    try {
+      // Extract data from JSON
+      final String label = json.getString("label");
+      final String eventId = getEventJson(label);
+
+      final int plays = json.getInt("nb_plays");
+      final int visits = json.getInt("nb_unique_visitors_impressions");
+      final int finishes = json.getInt("nb_finishes");
+      final OffsetDateTime date = OffsetDateTime.now();
+
+      // Create new Impression Flowable
+      return seriesForEvent(logger, client, "org", eventId)
+              .flatMap(series -> Flowable.just(new Impression(eventId, "org", series, plays, visits, finishes, date)));
+
+    } catch (final JSONException e) {
+      throw new ParsingJsonSyntaxException(json.toString());
+    }
+  }
+
+  private static String getEventJson(final String label) {
+    final String sub = label.substring(1, 7);
+
+    if (sub.equals("engage")) {
+      return label.substring(label.lastIndexOf("?id=") + 4, label.lastIndexOf("?id=") + 40);
+    } else if (sub.equals("static")) {
+      return label.substring(label.lastIndexOf("yer/") + 4, label.lastIndexOf("yer/") + 40);
+    }
+    return null;
   }
 }

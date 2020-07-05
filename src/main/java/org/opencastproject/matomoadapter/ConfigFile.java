@@ -49,15 +49,22 @@ public final class ConfigFile {
   private static final String MATOMO_URI = "matomo.uri";
   private static final String MATOMO_SITEID = "matomo.siteid";
   private static final String MATOMO_TOKEN = "matomo.token";
+  // Opencast options
+  private static final String OPENCAST_URI = "opencast.external-api.uri";
+  private static final String OPENCAST_USER = "opencast.external-api.user";
+  private static final String OPENCAST_PASSWORD = "opencast.external-api.password";
   // Config objects
   private final InfluxDBConfig influxDBConfig;
   private final MatomoConfig matomoConfig;
+  private final OpencastConfig opencastConfig;
 
   private ConfigFile(
           final InfluxDBConfig influxDBConfig,
-          final MatomoConfig matomoConfig) {
+          final MatomoConfig matomoConfig,
+          final OpencastConfig opencastConfig) {
     this.influxDBConfig = influxDBConfig;
     this.matomoConfig = matomoConfig;
+    this.opencastConfig = opencastConfig;
   }
 
   public static ConfigFile readFile(final Path p) {
@@ -100,6 +107,16 @@ public final class ConfigFile {
             new MatomoConfig(matomoHost, matomoSiteId, matomoToken) :
             null;
 
+    // Parse Opencast config
+    final String opencastHost = parsed.getProperty(OPENCAST_URI);
+    final String opencastUser = parsed.getProperty(OPENCAST_USER);
+    final String opencastPassword = parsed.getProperty(OPENCAST_PASSWORD);
+
+    // Create new Opencast config object
+    final OpencastConfig opencastConfig = opencastHost != null && opencastUser != null && opencastPassword != null ?
+            new OpencastConfig(opencastHost, opencastUser, opencastPassword) :
+            null;
+
     // Initialized the ConfigFile Object with filled in properties for both InfluxDB and Opencast
     return new ConfigFile(new InfluxDBConfig(parsed.getProperty(INFLUXDB_URI),
                                              influxDbUser,
@@ -107,7 +124,8 @@ public final class ConfigFile {
                                              influxDbDbName,
                                              parsed.getProperty(INFLUXDB_RETENTION_POLICY),
                                              parsed.getProperty(INFLUXDB_LOG_LEVEL, "info")),
-                          matomoConfig);
+                          matomoConfig,
+                          opencastConfig);
   }
 
   public InfluxDBConfig getInfluxDBConfig() {
@@ -116,5 +134,9 @@ public final class ConfigFile {
 
   public MatomoConfig getMatomoConfig() {
     return this.matomoConfig;
+  }
+
+  public OpencastConfig getOpencastConfig() {
+    return this.opencastConfig;
   }
 }

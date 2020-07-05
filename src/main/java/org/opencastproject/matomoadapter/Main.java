@@ -65,13 +65,15 @@ public class Main {
 
       // Create a Matomo HTTP client (this might be a nop, if no Matomo token is given)
       final MatomoClient matClient = new MatomoClient(configFile.getMatomoConfig());
+      final OpencastClient occlient = new OpencastClient(configFile.getOpencastConfig());
 
-      /*
-      Flowable<String> code = MatomoUtils.getVersion(LOGGER, matClient, "API.getMatomoVersion",
-              configFile.getMatomoConfig().getToken(), configFile.getMatomoConfig().getSiteId(), "json");
-
-      code.blockingSubscribe(p -> System.out.println(p), 2048);
-      */
+      MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(), configFile.getMatomoConfig().getToken(),
+              "")
+              .flatMap(json -> OpencastUtils.makeImpression(LOGGER, occlient, json))
+              .map(Impression::toPoint)
+              .blockingSubscribe(p -> InfluxDBUtils.writePointToInflux(configFile.getInfluxDBConfig(), influxDB, p),
+                      Main::processError,
+                      2048);
 
       Flowable<JSONObject> code = MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
               configFile.getMatomoConfig().getToken(), "visitServerHour==12");
@@ -91,6 +93,27 @@ public class Main {
       }
       System.exit(ExitStatuses.INFLUXDB_RUNTIME_ERROR);
     }
+  }
+
+  /**
+   * Examine an exception, print a nice error message and exit
+   *
+   * @param e The error to analyze
+   */
+  private static void processError(final Throwable e) {
+    if (e instanceof FileNotFoundException) {
+      LOGGER.error("Log file \"" + e.getMessage() + "\" not found", e);
+      System.exit(ExitStatuses.LOG_FILE_NOT_FOUND);
+    } else if (e instanceof ParsingJsonSyntaxException) {
+      LOGGER.error("Couldn't parse Opencast's json: " + ((ParsingJsonSyntaxException) e).getJson(), e);
+      System.exit(ExitStatuses.OPENCAST_JSON_SYNTAX_ERROR);
+    } else if (e instanceof OpencastClientConfigurationException) {
+      LOGGER.error("Opencast configuration error:", e);
+      System.exit(ExitStatuses.OPENCAST_CLIENT_CONFIGURATION_ERROR);
+    } else {
+      LOGGER.error("Error:", e);
+    }
+    System.exit(ExitStatuses.UNKNOWN);
   }
 
   /**

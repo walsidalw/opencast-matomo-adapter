@@ -70,7 +70,7 @@ public final class OpencastClient {
     return retrofit.create(OpencastExternalAPI.class);
   }
 
-  private Flowable<Response<ResponseBody>> getRequest(final String organization, final String episodeId) {
+  public Flowable<Response<ResponseBody>> getEventRequest(final String organization, final String episodeId) {
     LOGGER.debug("OCREQUESTSTART, episode {}, organization {}", episodeId, organization);
     return getClient(organization).getEvent(episodeId, getAuthHeader());
   }
