@@ -77,9 +77,9 @@ public final class MatomoClient {
    * @return Raw response to the request
    */
   public Flowable<Response<ResponseBody>> getResourcesRequest(final String idSite, final String token,
-                                                              final String hour) {
-    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoResources, time: {}", hour);
-    return getClient().getResources(idSite, token, hour);
+                                                              final String date) {
+    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoResources, time: {}", date);
+    return getClient().getResources(idSite, token, date);
   }
 
   public Flowable<Response<ResponseBody>> getSegmentsRequest(final String idSite, final String token,

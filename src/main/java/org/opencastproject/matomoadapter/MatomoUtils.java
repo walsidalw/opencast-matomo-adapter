@@ -77,10 +77,10 @@ public final class MatomoUtils {
           final MatomoClient client,
           final String idSite,
           final String token,
-          final String hour) {
+          final String date) {
     logger.info("Retrieving resources");
     return client
-            .getResourcesRequest(idSite, token, hour)
+            .getResourcesRequest(idSite, token, date)
             .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
             .map(MatomoUtils::getResourcesJson)
             .flatMapIterable(json -> json);

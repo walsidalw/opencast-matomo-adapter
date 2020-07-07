@@ -61,14 +61,17 @@ public final class Impression {
    */
   public Point toPoint() {
     return Point
-            .measurement("impressions")
+            .measurement("impressions_daily")
             .time(this.date.toInstant().getEpochSecond(), TimeUnit.SECONDS)
             .addField("plays", this.plays)
             .addField("visitors", this.visitors)
             .addField("finishes", this.finishes)
-            .tag("seriesId", this.seriesId)
+            //.tag("seriesId", this.seriesId)
+            .tag("seriesId", "2c2b6898-a1af-4b97-8b86-d72ad26d34dc")
+            //.tag("organizationId", this.organizationId)
             .tag("organizationId", this.organizationId)
-            .tag("episodeId", this.episodeId)
+            //.tag("episodeId", this.episodeId)
+            .tag("episodeId", "6d26d029-9238-4b6e-aa26-97983b88f614")
             .build();
   }
 }

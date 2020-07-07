@@ -27,9 +27,16 @@ import org.json.JSONObject;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Writer;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.Period;
+import java.util.Optional;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -64,20 +71,60 @@ public final class Main {
       // Create a Matomo HTTP client (this might be a nop, if no Matomo token is given)
       final MatomoClient matClient = new MatomoClient(configFile.getMatomoConfig());
       final OpencastClient occlient = new OpencastClient(configFile.getOpencastConfig());
+      final InfluxDBBatch batch = new InfluxDBBatch(configFile.getInfluxDBConfig());
 
-      MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(), configFile.getMatomoConfig().getToken(),
+      // Initialize cache
+
+      // Check if file with timestamp exists. If it exists check if timestamp is >=24h old. If it is,
+      // split difference into days/dates. For each date getResources. Write eventId -> seriesId pairing into cache.
+
+      // If no file exists, fetch getResources data for yesterday. Write eventId -> seriesId pairing into cache.
+
+      // Next, fetch data for segments.
+
+      // When done write new timestamp to file and sleep until next day, hour from config file. Then repeat steps above.
+
+      // Übergebe den cache an makeImpression
+      /*MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(), configFile.getMatomoConfig().getToken(),
               "")
               .flatMap(json -> OpencastUtils.makeImpression(LOGGER, occlient, json))
               .map(Impression::toPoint)
               .blockingSubscribe(p -> InfluxDBUtils.writePointToInflux(configFile.getInfluxDBConfig(), influxDB, p),
                       Main::processError,
-                      2048);
+                      2048);*/
 
+      Path p = configFile.getPathToTime();
 
+      final LocalDate date = Files.lines(p).findFirst().isPresent() ?
+              LocalDate.parse(Files.lines(p).findFirst().get()) :
+              LocalDate.now().minusDays(1);
 
-      /*Flowable<JSONObject> code = MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
-              configFile.getMatomoConfig().getToken(), "visitServerHour==12");
-      code.blockingSubscribe(p -> System.out.println("Plays: " + p.getInt("nb_plays")), 2048);*/
+      final LocalDate now = LocalDate.now();
+
+      int days = Period.between(date, now).getDays();
+
+      for (int i = days; i > 0; i--) {
+        OffsetDateTime time = OffsetDateTime.now().minusDays(i);
+        MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
+                configFile.getMatomoConfig().getToken(), now.minusDays(i).toString())
+                .flatMap(json -> OpencastUtils.makeImpression(LOGGER, occlient, json, time))
+                .map(Impression::toPoint)
+                .blockingSubscribe(batch::addToBatch, Main::processError, 2048);
+
+        System.out.println("Done with points " + time);
+
+        batch.writeBatch(influxDB);
+        System.out.println("Done with writing " + time);
+
+        influxDB.disableBatch();
+
+        System.out.println("Done with program " + time);
+      }
+
+      Writer filewriter = new FileWriter(String.valueOf(p), false);
+      filewriter.write(now.toString());
+      filewriter.flush();
+      filewriter.close();
 
     } catch (final MatomoClientConfigurationException e) {
 
@@ -97,6 +144,8 @@ public final class Main {
         LOGGER.error("InfluxDB error: " + e.getMessage());
       }
       System.exit(ExitStatuses.INFLUXDB_RUNTIME_ERROR);
+    } catch (IOException e) {
+      e.printStackTrace();
     }
   }
 

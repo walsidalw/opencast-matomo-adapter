@@ -24,6 +24,7 @@ package org.opencastproject.matomoadapter;
 import org.influxdb.InfluxDB;
 import org.influxdb.InfluxDBFactory;
 import org.influxdb.InfluxDBIOException;
+import org.influxdb.dto.BatchPoints;
 import org.influxdb.dto.Point;
 import org.influxdb.dto.Pong;
 import org.slf4j.LoggerFactory;
@@ -31,10 +32,29 @@ import org.slf4j.LoggerFactory;
 /**
  * Contains utility functions related to InfluxDB
  */
-public final class InfluxDBUtils {
+public final class InfluxDBBatch {
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
-  private InfluxDBUtils() {
+  private final BatchPoints batch;
+
+  public InfluxDBBatch(final InfluxDBConfig config) {
+    this.batch = BatchPoints.database(config.getDb()).retentionPolicy(config.getRetentionPolicy()).build();
+  }
+
+  public void addToBatch(final Point p) {
+    this.batch.point(p);
+  }
+
+  public void writeBatch(final InfluxDB influxDB) {
+    try {
+      final Pong pong = influxDB.ping();
+      if (!pong.isGood()) {
+        LOGGER.error("INFLUXPINGERROR, not good");
+      }
+    } catch (final InfluxDBIOException e) {
+      LOGGER.error("INFLUXPINGERROR, {}", e.getMessage());
+    }
+    influxDB.write(this.batch);
   }
 
   /**
@@ -68,7 +88,7 @@ public final class InfluxDBUtils {
     try {
       influxDB = InfluxDBFactory.connect(config.getHost(), config.getUser(), config.getPassword());
 
-      //influxDB.setDatabase(config.getDb());
+      influxDB.setDatabase(config.getDb());
       influxDB.enableBatch();
       if (config.getLogLevel().equals("debug")) {
         influxDB.setLogLevel(InfluxDB.LogLevel.FULL);

@@ -53,18 +53,23 @@ public final class ConfigFile {
   private static final String OPENCAST_URI = "opencast.external-api.uri";
   private static final String OPENCAST_USER = "opencast.external-api.user";
   private static final String OPENCAST_PASSWORD = "opencast.external-api.password";
+  // Path to last date file
+  private static final String ADAPTER_PATH = "adapter.date-file";
   // Config objects
   private final InfluxDBConfig influxDBConfig;
   private final MatomoConfig matomoConfig;
   private final OpencastConfig opencastConfig;
+  private final Path time;
 
   private ConfigFile(
           final InfluxDBConfig influxDBConfig,
           final MatomoConfig matomoConfig,
-          final OpencastConfig opencastConfig) {
+          final OpencastConfig opencastConfig,
+          final Path time) {
     this.influxDBConfig = influxDBConfig;
     this.matomoConfig = matomoConfig;
     this.opencastConfig = opencastConfig;
+    this.time = time;
   }
 
   public static ConfigFile readFile(final Path p) {
@@ -117,6 +122,8 @@ public final class ConfigFile {
             new OpencastConfig(opencastHost, opencastUser, opencastPassword) :
             null;
 
+    final Path time = Path.of(parsed.getProperty(ADAPTER_PATH));
+
     // Initialized the ConfigFile Object with filled in properties for both InfluxDB and Opencast
     return new ConfigFile(new InfluxDBConfig(parsed.getProperty(INFLUXDB_URI),
                                              influxDbUser,
@@ -125,7 +132,8 @@ public final class ConfigFile {
                                              parsed.getProperty(INFLUXDB_RETENTION_POLICY),
                                              parsed.getProperty(INFLUXDB_LOG_LEVEL, "info")),
                           matomoConfig,
-                          opencastConfig);
+                          opencastConfig,
+                          time);
   }
 
   public InfluxDBConfig getInfluxDBConfig() {
@@ -139,4 +147,6 @@ public final class ConfigFile {
   public OpencastConfig getOpencastConfig() {
     return this.opencastConfig;
   }
+
+  public Path getPathToTime() { return this.time; }
 }

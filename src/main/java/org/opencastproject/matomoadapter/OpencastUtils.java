@@ -28,7 +28,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -81,6 +84,7 @@ public final class OpencastUtils {
           final String organization,
           final String episodeId) {
     logger.info("Retrieving series for organization \"{}\", episode \"{}\"...", organization, episodeId);
+
     return client
             .getEventRequest(organization, episodeId)
             .concatMap(body -> OpencastUtils.checkResponseCode(logger, body, organization, episodeId))
@@ -112,7 +116,8 @@ public final class OpencastUtils {
     }
     return correctResponse ?
             Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string()) :
-            Flowable.error(new InvalidOpencastResponse(x.code()));
+            //Flowable.error(new InvalidOpencastResponse(x.code()));
+            Flowable.empty();
   }
 
   /**
@@ -128,23 +133,25 @@ public final class OpencastUtils {
   public static Flowable<Impression> makeImpression(
           @SuppressWarnings("SameParameterValue") final Logger logger,
           final OpencastClient client,
-          final JSONObject json) {
+          final JSONObject json,
+          final OffsetDateTime time) {
 
     try {
       // Extract data from JSON
       final String label = json.getString("label");
       final String eventId = getEventJson(label);
 
+      if (eventId == null)
+        return Flowable.empty();
+
       final int plays = json.getInt("nb_plays");
       final int visits = json.getInt("nb_unique_visitors_impressions");
       final int finishes = json.getInt("nb_finishes");
-      final OffsetDateTime date = OffsetDateTime.now();
+      System.out.println("time now: " + time);
 
       // Create new Impression Flowable with series data from Opencast
-      //return seriesForEvent(logger, client, "org", eventId)
-      //        .flatMap(series -> Flowable.just(new Impression(eventId, "org", series, plays, visits, finishes, date)));
-
-      return Flowable.just(new Impression(eventId, "org", "", plays, visits, finishes, date));
+      return seriesForEvent(logger, client, "org", eventId)
+              .flatMap(series -> Flowable.just(new Impression(eventId, "mh_default_org", series, plays, visits, finishes, time)));
 
     } catch (final JSONException e) {
       throw new ParsingJsonSyntaxException(json.toString());
@@ -160,6 +167,13 @@ public final class OpencastUtils {
    */
   private static String getEventJson(final String label) {
     final String sub = label.substring(1, 7);
+
+    final String test = label.substring(label.lastIndexOf("?id=") + 4, label.lastIndexOf("?id=") + 8);
+
+    if (test.equals("27bd") ||
+            test.equals("5e60")) {
+      return null;
+    }
 
     if (sub.equals("engage")) {
       return label.substring(label.lastIndexOf("?id=") + 4, label.lastIndexOf("?id=") + 40);
