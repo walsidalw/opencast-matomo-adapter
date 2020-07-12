@@ -27,6 +27,8 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.format.DateTimeParseException;
 import java.util.Properties;
 
 /**
@@ -53,6 +55,8 @@ public final class ConfigFile {
   private static final String OPENCAST_URI = "opencast.external-api.uri";
   private static final String OPENCAST_USER = "opencast.external-api.user";
   private static final String OPENCAST_PASSWORD = "opencast.external-api.password";
+  private static final String OPENCAST_CACHE_SIZE = "opencast.external-api.max-cache-size";
+  private static final String OPENCAST_EXPIRATION_DURATION = "opencast.external-api.cache-expiration-duration";
   // Path to last date file
   private static final String ADAPTER_PATH = "adapter.date-file";
   // Config objects
@@ -117,12 +121,45 @@ public final class ConfigFile {
     final String opencastUser = parsed.getProperty(OPENCAST_USER);
     final String opencastPassword = parsed.getProperty(OPENCAST_PASSWORD);
 
+    Duration opencastCacheExpirationDuration = Duration.ZERO;
+    try {
+      opencastCacheExpirationDuration = Duration.parse(parsed.getProperty(OPENCAST_EXPIRATION_DURATION, "PT0M"));
+      if (opencastCacheExpirationDuration.isNegative()) {
+        LOGGER.error(
+                "Error parsing config file \"{}\": {} must be a positive ISO duration value such as \"PT5M\"",
+                p, OPENCAST_EXPIRATION_DURATION);
+        System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
+      }
+    } catch (final DateTimeParseException e) {
+      LOGGER.error(
+              "Error parsing config file \"{}\": {} must be a positive ISO duration value such as \"PT5M\"",
+              p, OPENCAST_EXPIRATION_DURATION);
+      System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
+    }
+
+    int opencastCacheSize = 0;
+    try {
+      opencastCacheSize = Integer.parseInt(parsed.getProperty(OPENCAST_CACHE_SIZE, "1000"));
+      if (opencastCacheSize < 0) {
+        LOGGER.error(
+                "Error parsing config file \"{}\": {} must be a positive value such as \"1000\"",
+                p, OPENCAST_CACHE_SIZE);
+        System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
+      }
+    } catch (final NumberFormatException e) {
+      LOGGER.error(
+              "Error parsing config file \"{}\": {} must be a positive value such as \"1000\"",
+              p, OPENCAST_CACHE_SIZE);
+      System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
+    }
+
     // Create new Opencast config object
     final OpencastConfig opencastConfig = opencastHost != null && opencastUser != null && opencastPassword != null ?
-            new OpencastConfig(opencastHost, opencastUser, opencastPassword) :
+            new OpencastConfig(opencastHost, opencastUser, opencastPassword,
+                    opencastCacheSize, opencastCacheExpirationDuration) :
             null;
 
-    final Path time = Path.of(parsed.getProperty(ADAPTER_PATH));
+    final Path pathToLastDate = Path.of(parsed.getProperty(ADAPTER_PATH));
 
     // Initialized the ConfigFile Object with filled in properties for both InfluxDB and Opencast
     return new ConfigFile(new InfluxDBConfig(parsed.getProperty(INFLUXDB_URI),
@@ -133,7 +170,7 @@ public final class ConfigFile {
                                              parsed.getProperty(INFLUXDB_LOG_LEVEL, "info")),
                           matomoConfig,
                           opencastConfig,
-                          time);
+                          pathToLastDate);
   }
 
   public InfluxDBConfig getInfluxDBConfig() {

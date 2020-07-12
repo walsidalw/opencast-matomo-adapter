@@ -41,7 +41,7 @@ public interface MatomoExternalAPI {
           @Query("format") String format);
 
   @GET("/?module=API&method=MediaAnalytics.getVideoResources&period=day&format=json&filter_limit="
-          + "1&idSubtable=1&filter_pattern=^[1-9]\\d*$&filter_column=nb_plays&showColumns="
+          + "10&idSubtable=1&filter_pattern=^[1-9]\\d*$&filter_column=nb_plays&showColumns="
           + "label,nb_plays,nb_unique_visitors_impressions,nb_finishes")
   Flowable<Response<ResponseBody>> getResources(
           @Query("idSite") String idSite,

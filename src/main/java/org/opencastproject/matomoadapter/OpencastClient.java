@@ -26,6 +26,9 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+
 import devcsrj.okhttp3.logging.HttpLoggingInterceptor;
 import io.reactivex.Flowable;
 import okhttp3.Interceptor;
@@ -39,12 +42,12 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
  * Manages Opencast's External API endpoint
  */
 public final class OpencastClient {
-  private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(OpencastClient.class);
 
-  private static final String ORGANIZATION = "{organization}";
+  private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(OpencastClient.class);
 
   private final OpencastConfig opencastConfig;
   private final OkHttpClient client;
+  private final Cache<String, String> cache;
 
   /**
    * Create the client
@@ -55,13 +58,16 @@ public final class OpencastClient {
     this.opencastConfig = opencastConfig;
     final Interceptor interceptor = new HttpLoggingInterceptor();
     this.client = new OkHttpClient.Builder().addInterceptor(interceptor).build();
+    this.cache = opencastConfig != null && !opencastConfig.getCacheDuration().isZero()
+            && opencastConfig.getCacheSize() != 0 ?
+            CacheBuilder.newBuilder()
+                    .expireAfterAccess(opencastConfig.getCacheDuration())
+                    .maximumSize(opencastConfig.getCacheSize())
+                    .build() :
+            null;
   }
 
-  private boolean hostHasPlaceholder() {
-    return this.opencastConfig.getUri().contains(ORGANIZATION);
-  }
-
-  private OpencastExternalAPI getClient(final String organization) {
+  private OpencastExternalAPI getClient() {
     final Retrofit retrofit = new Retrofit.Builder()
             .baseUrl(this.opencastConfig.getUri())
             .client(this.client)
@@ -72,7 +78,7 @@ public final class OpencastClient {
 
   public Flowable<Response<ResponseBody>> getEventRequest(final String organization, final String episodeId) {
     LOGGER.debug("OCREQUESTSTART, episode {}, organization {}", episodeId, organization);
-    return getClient(organization).getEvent(episodeId, getAuthHeader());
+    return getClient().getEvent(episodeId, getAuthHeader());
   }
 
   private String getAuthHeader() {
@@ -83,5 +89,9 @@ public final class OpencastClient {
     final String userAndPass = user + ":" + pw;
     final String userAndPassBase64 = Base64.getEncoder().encodeToString(userAndPass.getBytes(StandardCharsets.UTF_8));
     return "Basic " + userAndPassBase64;
+  }
+
+  public Cache<String, String> getCache() {
+    return this.cache;
   }
 }

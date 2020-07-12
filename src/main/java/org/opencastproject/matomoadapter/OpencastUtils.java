@@ -21,6 +21,7 @@
 
 package org.opencastproject.matomoadapter;
 
+import com.google.common.cache.Cache;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
@@ -28,10 +29,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -72,6 +70,7 @@ public final class OpencastUtils {
   /**
    * Request metadata for the episode and return the corresponding series ID
    *
+   * @param cache             Cache from Opencast client for eventId and seriesId storage
    * @param logger            Logger to use
    * @param client            Opencast HTTP client instance to use
    * @param organization      The episode's organization
@@ -82,9 +81,19 @@ public final class OpencastUtils {
           final Logger logger,
           final OpencastClient client,
           final String organization,
-          final String episodeId) {
+          final String episodeId,
+          final Cache<String, String> cache) {
+
+    // Check if cache exists and then check, if the eventId is already stored
+    final String cachedId = cache != null ? cache.getIfPresent(episodeId) : null;
+
+    // If the eventId already has an entry with a corresponding seriesId, return seriesId
+    if (cachedId != null)
+      return Flowable.just(cachedId);
+
     logger.info("Retrieving series for organization \"{}\", episode \"{}\"...", organization, episodeId);
 
+    // Request event information from Opencast. If available, store the seriesId in the cache
     return client
             .getEventRequest(organization, episodeId)
             .concatMap(body -> OpencastUtils.checkResponseCode(logger, body, organization, episodeId))
@@ -93,6 +102,9 @@ public final class OpencastUtils {
               if (series.isPresent())
                 return Flowable.just(series.get());
               return Flowable.just("");
+            }).doOnNext(seriesId -> {
+              if (cache != null)
+                cache.put(episodeId, seriesId);
             });
   }
 
@@ -116,6 +128,7 @@ public final class OpencastUtils {
     }
     return correctResponse ?
             Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string()) :
+            // TEST TEST TEST TEST TEST
             //Flowable.error(new InvalidOpencastResponse(x.code()));
             Flowable.empty();
   }
@@ -125,6 +138,7 @@ public final class OpencastUtils {
    * Subsequently, the Opencast Event API is called for relevant series information (seriesID).
    * Finally, all required data is saved and returned within an Impression Object.
    *
+   * @param time Date for which the data is requested
    * @param logger Logger from the main method
    * @param client Opencast client used for the event API request
    * @param json JSON object representing one video and its statistics
@@ -141,17 +155,19 @@ public final class OpencastUtils {
       final String label = json.getString("label");
       final String eventId = getEventJson(label);
 
+      // If the JSON label doesnt fit the pattern (e.g. Live Streams), the entry is evicted
       if (eventId == null)
         return Flowable.empty();
 
+      // Parse the remaining important data
       final int plays = json.getInt("nb_plays");
       final int visits = json.getInt("nb_unique_visitors_impressions");
       final int finishes = json.getInt("nb_finishes");
-      System.out.println("time now: " + time);
 
       // Create new Impression Flowable with series data from Opencast
-      return seriesForEvent(logger, client, "org", eventId)
-              .flatMap(series -> Flowable.just(new Impression(eventId, "mh_default_org", series, plays, visits, finishes, time)));
+      return seriesForEvent(logger, client, "org", eventId, client.getCache())
+              .flatMap(series -> Flowable.just(new Impression(eventId, "mh_default_org",
+                      series, plays, visits, finishes, time)));
 
     } catch (final JSONException e) {
       throw new ParsingJsonSyntaxException(json.toString());
@@ -160,7 +176,7 @@ public final class OpencastUtils {
 
   /**
    * Parses the video URL to find the eventID. Currently the most common URL-types, coming from the
-   * Theodul player are supported.
+   * Theodul and Paella player are supported. Live Streams do not contain an eventID.
    *
    * @param label Sub-URL of the video
    * @return The eventID parsed from the URL
@@ -168,8 +184,8 @@ public final class OpencastUtils {
   private static String getEventJson(final String label) {
     final String sub = label.substring(1, 7);
 
+    // TEST TEST TEST TEST TEST
     final String test = label.substring(label.lastIndexOf("?id=") + 4, label.lastIndexOf("?id=") + 8);
-
     if (test.equals("27bd") ||
             test.equals("5e60")) {
       return null;

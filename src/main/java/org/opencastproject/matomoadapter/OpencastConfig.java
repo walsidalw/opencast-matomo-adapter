@@ -21,6 +21,8 @@
 
 package org.opencastproject.matomoadapter;
 
+import java.time.Duration;
+
 /**
  * Represents all fields for Opencast's External API configuration (immutable)
  */
@@ -28,14 +30,20 @@ public final class OpencastConfig {
   private final String uri;
   private final String user;
   private final String password;
+  private final int cacheSize;
+  private final Duration cacheDuration;
 
   public OpencastConfig(
           final String uri,
           final String user,
-          final String password) {
+          final String password,
+          final int cacheSize,
+          final Duration cacheDuration) {
     this.uri = uri;
     this.user = user;
     this.password = password;
+    this.cacheSize = cacheSize;
+    this.cacheDuration = cacheDuration;
   }
 
   public String getUri() {
@@ -48,5 +56,13 @@ public final class OpencastConfig {
 
   public String getPassword() {
     return this.password;
+  }
+
+  public int getCacheSize() {
+    return this.cacheSize;
+  }
+
+  public Duration getCacheDuration() {
+    return this.cacheDuration;
   }
 }
