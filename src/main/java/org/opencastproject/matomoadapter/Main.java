@@ -36,7 +36,12 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.Period;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -50,81 +55,60 @@ import ch.qos.logback.core.joran.spi.JoranException;
 import ch.qos.logback.core.util.StatusPrinter;
 import io.reactivex.BackpressureStrategy;
 import io.reactivex.Flowable;
-
+import io.reactivex.Scheduler;
+import io.reactivex.schedulers.Schedulers;
 
 public final class Main {
+
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
   private Main() {
   }
 
+
+  public static void testT(final int size) {
+    LOGGER.error("Size of response: " + size);
+  }
+
+  public static void testS(final String size) {
+    LOGGER.error("Sub of response: " + size);
+  }
+
   public static void main(final String[] args) {
+
+    final long start = System.nanoTime();
+
     // Preliminaries: command line parsing, config file parsing
     final CommandLine commandLine = CommandLine.parse(args);
     final ConfigFile configFile = ConfigFile.readFile(commandLine.getConfigFile());
+    final Path p = configFile.getPathToTime();
 
+    // Log configuration
     configureLogManually();
 
     // Connect and configure InfluxDB
     try (final InfluxDB influxDB = InfluxDBUtils.connect(configFile.getInfluxDBConfig())) {
 
-      // Create a Matomo HTTP client (this might be a nop, if no Matomo token is given)
+      // Create Matomo and Opencast HTTP clients
       final MatomoClient matClient = new MatomoClient(configFile.getMatomoConfig());
-      final OpencastClient occlient = new OpencastClient(configFile.getOpencastConfig());
-      final InfluxDBBatch batch = new InfluxDBBatch(configFile.getInfluxDBConfig());
-
-      // Initialize cache
-
-      // Check if file with timestamp exists. If it exists check if timestamp is >=24h old. If it is,
-      // split difference into days/dates. For each date getResources. Write eventId -> seriesId pairing into cache.
-
-      // If no file exists, fetch getResources data for yesterday. Write eventId -> seriesId pairing into cache.
-
-      // Next, fetch data for segments.
-
-      // When done write new timestamp to file and sleep until next day, hour from config file. Then repeat steps above.
-
-      // Übergebe den cache an makeImpression
-      /*MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(), configFile.getMatomoConfig().getToken(),
-              "")
-              .flatMap(json -> OpencastUtils.makeImpression(LOGGER, occlient, json))
-              .map(Impression::toPoint)
-              .blockingSubscribe(p -> InfluxDBUtils.writePointToInflux(configFile.getInfluxDBConfig(), influxDB, p),
-                      Main::processError,
-                      2048);*/
-
-      Path p = configFile.getPathToTime();
-
-      final LocalDate date = Files.lines(p).findFirst().isPresent() ?
+      final OpencastClient ocClient = new OpencastClient(configFile.getOpencastConfig());
+      // Create a file writer for last date information
+      final Writer fileWriter;
+      // Check the file with last updated date. If no date is present set to yesterday
+      final LocalDate lastDate = Files.lines(p).findFirst().isPresent() ?
               LocalDate.parse(Files.lines(p).findFirst().get()) :
               LocalDate.now().minusDays(1);
 
-      final LocalDate now = LocalDate.now();
+      final LocalDate dateNow = LocalDate.now();
 
-      int days = Period.between(date, now).getDays();
+      // Days between today and the last update
+      final int days = Period.between(lastDate, dateNow).getDays();
 
-      for (int i = days; i > 0; i--) {
-        OffsetDateTime time = OffsetDateTime.now().minusDays(i);
-        MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
-                configFile.getMatomoConfig().getToken(), now.minusDays(i).toString())
-                .flatMap(json -> OpencastUtils.makeImpression(LOGGER, occlient, json, time))
-                .map(Impression::toPoint)
-                .blockingSubscribe(batch::addToBatch, Main::processError, 2048);
+      getViewStats(matClient, ocClient, influxDB, configFile, days, dateNow);
 
-        System.out.println("Done with points " + time);
-
-        batch.writeBatch(influxDB);
-        System.out.println("Done with writing " + time);
-
-        influxDB.disableBatch();
-
-        System.out.println("Done with program " + time);
-      }
-
-      Writer filewriter = new FileWriter(String.valueOf(p), false);
-      filewriter.write(now.toString());
-      filewriter.flush();
-      filewriter.close();
+      fileWriter = new FileWriter(String.valueOf(p), false);
+      fileWriter.write(dateNow.toString());
+      fileWriter.flush();
 
     } catch (final MatomoClientConfigurationException e) {
 
@@ -144,9 +128,49 @@ public final class Main {
         LOGGER.error("InfluxDB error: " + e.getMessage());
       }
       System.exit(ExitStatuses.INFLUXDB_RUNTIME_ERROR);
-    } catch (IOException e) {
+    } catch (final IOException e) {
       e.printStackTrace();
     }
+
+    final long end = System.nanoTime();
+    System.out.println(end - start);
+
+  }
+
+  private static void getViewStats(final MatomoClient matClient, final OpencastClient ocClient, final InfluxDB influxDB,
+                                   final ConfigFile configFile, final int days,
+                                   final LocalDate dateNow) {
+
+    final ConcurrentLinkedQueue<String> viewed = new ConcurrentLinkedQueue<>();
+    ArrayList<String> count = new ArrayList<>();
+
+    for (int i = days; i > 0; i--) {
+
+      final OffsetDateTime queryDate = OffsetDateTime.now().minusDays(i);
+      final InfluxDBBatch batch = new InfluxDBBatch(configFile.getInfluxDBConfig());
+
+      MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
+              configFile.getMatomoConfig().getToken(), dateNow.minusDays(i).toString())
+              .parallel()
+              .runOn(Schedulers.io())
+              .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, queryDate, viewed, count))
+              .sequential()
+              .blockingSubscribe(batch::addToFilter, Main::processError, 2048);
+
+      Flowable.just(batch.getFilteredList()).flatMapIterable(impression -> impression)
+              .parallel()
+              .runOn(Schedulers.io())
+              .map(Impression::toPoint)
+              .sequential()
+              .blockingSubscribe(batch::addToBatch, Main::processError, 2048);
+
+      batch.writeBatch(influxDB);
+      System.out.println("Size of the queue: " + viewed.size());
+      viewed.clear();
+
+      System.out.println(batch.getFilteredList().size());
+    }
+    System.out.println("Saved Opencast requests: " + count.size());
   }
 
   /**

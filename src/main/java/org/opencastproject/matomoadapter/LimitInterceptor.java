@@ -21,39 +21,25 @@
 
 package org.opencastproject.matomoadapter;
 
-/**
- * Represents all fields for Matomo's External API configuration (immutable)
- */
-public final class MatomoConfig {
-  private final String uri;
-  private final String siteId;
-  private final String token;
-  private final int rate;
+import com.google.common.util.concurrent.RateLimiter;
 
-  public MatomoConfig(
-          final String uri,
-          final String siteId,
-          final String token,
-          final int rate) {
-    this.uri = uri;
-    this.siteId = siteId;
-    this.token = token;
-    this.rate = rate;
+import java.io.IOException;
+
+import okhttp3.Interceptor;
+import okhttp3.Response;
+
+public class LimitInterceptor implements Interceptor {
+
+  private final RateLimiter rateLimiter;
+
+  public LimitInterceptor(final int rate) {
+    this.rateLimiter = RateLimiter.create(rate);
   }
 
-  public String getUri() {
-    return this.uri;
+  @Override
+  public Response intercept(Chain chain) throws IOException {
+    this.rateLimiter.acquire(1);
+    return chain.proceed(chain.request());
   }
 
-  public String getSiteId() {
-    return this.siteId;
-  }
-
-  public String getToken() {
-    return this.token;
-  }
-
-  public int getRate() {
-    return this.rate;
-  }
 }

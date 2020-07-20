@@ -29,6 +29,9 @@ import org.influxdb.dto.Point;
 import org.influxdb.dto.Pong;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+
 /**
  * Contains utility functions related to InfluxDB
  */
@@ -36,12 +39,44 @@ public final class InfluxDBBatch {
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
   private final BatchPoints batch;
+  private final ArrayList<Impression> filterList;
+
+  private int count = 0;
 
   public InfluxDBBatch(final InfluxDBConfig config) {
     this.batch = BatchPoints.database(config.getDb()).retentionPolicy(config.getRetentionPolicy()).build();
+    this.filterList = new ArrayList<>();
   }
 
+  public void addToFilter(final Impression newImpression) {
+
+    final String episodeId = newImpression.getEpisodeId();
+
+    if (this.filterList.contains(newImpression)) {
+
+      final Impression old = this.filterList.get(this.filterList.indexOf(newImpression));
+
+      final int plays = old.getPlays() + newImpression.getPlays();
+      final int visitors = old.getVisitors() + newImpression.getVisitors();
+      final int finishes = old.getFinishes() + newImpression.getFinishes();
+
+      final Impression combine = new Impression(episodeId, old.getOrganizationId(), old.getSeriesId(),
+                                                plays, visitors, finishes, old.getDate());
+
+      this.filterList.remove(old);
+      this.filterList.add(combine);
+
+    }
+    else {
+      this.filterList.add(newImpression);
+    }
+  }
+
+  public ArrayList<Impression> getFilteredList() { return this.filterList; }
+
   public void addToBatch(final Point p) {
+    count++;
+    System.out.println("Count of points: " + count);
     this.batch.point(p);
   }
 

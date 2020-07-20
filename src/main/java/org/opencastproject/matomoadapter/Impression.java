@@ -24,6 +24,7 @@ package org.opencastproject.matomoadapter;
 import org.influxdb.dto.Point;
 
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -66,12 +67,41 @@ public final class Impression {
             .addField("plays", this.plays)
             .addField("visitors", this.visitors)
             .addField("finishes", this.finishes)
-            //.tag("seriesId", this.seriesId)
-            .tag("seriesId", "2c2b6898-a1af-4b97-8b86-d72ad26d34dc")
-            //.tag("organizationId", this.organizationId)
+            .tag("seriesId", this.seriesId)
+            //.tag("seriesId", "2c2b6898-a1af-4b97-8b86-d72ad26d34dc")
             .tag("organizationId", this.organizationId)
-            //.tag("episodeId", this.episodeId)
-            .tag("episodeId", "6d26d029-9238-4b6e-aa26-97983b88f614")
+            //.tag("organizationId", this.organizationId)
+            .tag("episodeId", this.episodeId)
+            //.tag("episodeId", "6d26d029-9238-4b6e-aa26-97983b88f614")
             .build();
   }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o)
+      return true;
+    if (o == null || getClass() != o.getClass())
+      return false;
+    final Impression impression = (Impression) o;
+    return this.organizationId.equals(impression.organizationId) && this.episodeId.equals(impression.episodeId);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(this.organizationId, this.episodeId);
+  }
+
+  public String getEpisodeId() { return this.episodeId; }
+
+  public String getOrganizationId() { return this.organizationId; }
+
+  public String getSeriesId() { return this.seriesId; }
+
+  public int getPlays() { return this.plays; }
+
+  public int getVisitors() { return this.visitors; }
+
+  public int getFinishes() { return this.finishes; }
+
+  public OffsetDateTime getDate() { return this.date; }
 }

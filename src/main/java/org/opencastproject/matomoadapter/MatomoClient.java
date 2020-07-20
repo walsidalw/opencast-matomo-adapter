@@ -23,6 +23,8 @@ package org.opencastproject.matomoadapter;
 
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDate;
+
 import devcsrj.okhttp3.logging.HttpLoggingInterceptor;
 import io.reactivex.Flowable;
 import okhttp3.Interceptor;
@@ -49,7 +51,8 @@ public final class MatomoClient {
   public MatomoClient(final MatomoConfig matomoConfig) {
     this.matomoConfig = matomoConfig;
     final Interceptor interceptor = new HttpLoggingInterceptor();
-    this.client = new OkHttpClient.Builder().addInterceptor(interceptor).build();
+    final Interceptor limit = new LimitInterceptor(matomoConfig.getRate());
+    this.client = new OkHttpClient.Builder().addInterceptor(interceptor).addInterceptor(limit).build();
   }
 
   /**
@@ -85,6 +88,7 @@ public final class MatomoClient {
   public Flowable<Response<ResponseBody>> getSegmentsRequest(final String idSite, final String token,
           final String source) {
     LOGGER.debug("MATOMOREQUESTSTART, method: getVideoSegments, episodeId: {}", source);
-    return getClient().getSegments(idSite, token, source);
+    LocalDate date = LocalDate.now();
+    return getClient().getSegments(idSite, token, source, date.toString());
   }
 }

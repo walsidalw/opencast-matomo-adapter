@@ -30,9 +30,12 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import io.reactivex.Flowable;
 import okhttp3.ResponseBody;
@@ -70,7 +73,6 @@ public final class OpencastUtils {
   /**
    * Request metadata for the episode and return the corresponding series ID
    *
-   * @param cache             Cache from Opencast client for eventId and seriesId storage
    * @param logger            Logger to use
    * @param client            Opencast HTTP client instance to use
    * @param organization      The episode's organization
@@ -82,14 +84,19 @@ public final class OpencastUtils {
           final OpencastClient client,
           final String organization,
           final String episodeId,
-          final Cache<String, String> cache) {
+          final ConcurrentLinkedQueue<String> viewed,
+          ArrayList<String> count) {
+
+    final Cache<String, String> cache = client.getCache();
 
     // Check if cache exists and then check, if the eventId is already stored
     final String cachedId = cache != null ? cache.getIfPresent(episodeId) : null;
 
     // If the eventId already has an entry with a corresponding seriesId, return seriesId
-    if (cachedId != null)
+    if (cachedId != null) {
+      count.add("val");
       return Flowable.just(cachedId);
+    }
 
     logger.info("Retrieving series for organization \"{}\", episode \"{}\"...", organization, episodeId);
 
@@ -105,6 +112,10 @@ public final class OpencastUtils {
             }).doOnNext(seriesId -> {
               if (cache != null)
                 cache.put(episodeId, seriesId);
+              if(!viewed.contains(episodeId))
+                viewed.add(episodeId);
+              // TEST TEST TEST TEST
+              System.out.println(cache.size());
             });
   }
 
@@ -122,15 +133,21 @@ public final class OpencastUtils {
           final String episodeId) {
     final boolean correctResponse = x.code() / 200 == 1;
     if (!correctResponse) {
-      logger.error("OCHTTPERROR, episode {}, organization {}: code, {}", x.code(), episodeId, organization);
+      if (x.code() == 404) {
+        logger.error("OCHTTPERROR, episode {}, organization {}: code, {}", x.code(), episodeId, organization);
+        return Flowable.empty();
+      }
+      return Flowable.error(new InvalidOpencastResponse(x.code()));
     } else {
       logger.debug("OCHTTPSUCCESS, episode {}, organization {}", episodeId, organization);
+      return Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string());
     }
-    return correctResponse ?
+
+    /*return correctResponse ?
             Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string()) :
             // TEST TEST TEST TEST TEST
-            //Flowable.error(new InvalidOpencastResponse(x.code()));
-            Flowable.empty();
+            Flowable.error(new InvalidOpencastResponse(x.code()));
+            //Flowable.empty();*/
   }
 
   /**
@@ -148,7 +165,9 @@ public final class OpencastUtils {
           @SuppressWarnings("SameParameterValue") final Logger logger,
           final OpencastClient client,
           final JSONObject json,
-          final OffsetDateTime time) {
+          final OffsetDateTime time,
+          final ConcurrentLinkedQueue<String> viewed,
+          ArrayList<String> count) {
 
     try {
       // Extract data from JSON
@@ -165,7 +184,7 @@ public final class OpencastUtils {
       final int finishes = json.getInt("nb_finishes");
 
       // Create new Impression Flowable with series data from Opencast
-      return seriesForEvent(logger, client, "org", eventId, client.getCache())
+      return seriesForEvent(logger, client, "org", eventId, viewed, count)
               .flatMap(series -> Flowable.just(new Impression(eventId, "mh_default_org",
                       series, plays, visits, finishes, time)));
 
@@ -182,14 +201,11 @@ public final class OpencastUtils {
    * @return The eventID parsed from the URL
    */
   private static String getEventJson(final String label) {
-    final String sub = label.substring(1, 7);
 
-    // TEST TEST TEST TEST TEST
-    final String test = label.substring(label.lastIndexOf("?id=") + 4, label.lastIndexOf("?id=") + 8);
-    if (test.equals("27bd") ||
-            test.equals("5e60")) {
+    if (!label.contains("engage") && !label.contains("static"))
       return null;
-    }
+
+    final String sub = label.substring(1, 7);
 
     if (sub.equals("engage")) {
       return label.substring(label.lastIndexOf("?id=") + 4, label.lastIndexOf("?id=") + 40);

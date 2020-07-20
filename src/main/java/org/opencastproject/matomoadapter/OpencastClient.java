@@ -57,7 +57,8 @@ public final class OpencastClient {
   public OpencastClient(final OpencastConfig opencastConfig) {
     this.opencastConfig = opencastConfig;
     final Interceptor interceptor = new HttpLoggingInterceptor();
-    this.client = new OkHttpClient.Builder().addInterceptor(interceptor).build();
+    final LimitInterceptor limit = new LimitInterceptor(opencastConfig.getRate());
+    this.client = new OkHttpClient.Builder().addInterceptor(interceptor).build();//.addInterceptor(limit).build();
     this.cache = opencastConfig != null && !opencastConfig.getCacheDuration().isZero()
             && opencastConfig.getCacheSize() != 0 ?
             CacheBuilder.newBuilder()

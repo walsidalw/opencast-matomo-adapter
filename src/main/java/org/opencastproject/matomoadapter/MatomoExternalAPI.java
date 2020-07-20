@@ -25,7 +25,6 @@ import io.reactivex.Flowable;
 import okhttp3.ResponseBody;
 import retrofit2.Response;
 import retrofit2.http.GET;
-import retrofit2.http.Path;
 import retrofit2.http.Query;
 
 /**
@@ -33,25 +32,19 @@ import retrofit2.http.Query;
  */
 @SuppressWarnings("InterfaceMayBeAnnotatedFunctional")
 public interface MatomoExternalAPI {
-  @GET("/?module=API")
-  Flowable<Response<ResponseBody>> getDetails(
-          @Query("method") String method,
-          @Query("token_auth") String token,
-          @Query("idSite") String idSite,
-          @Query("format") String format);
-
   @GET("/?module=API&method=MediaAnalytics.getVideoResources&period=day&format=json&filter_limit="
-          + "10&idSubtable=1&filter_pattern=^[1-9]\\d*$&filter_column=nb_plays&showColumns="
+          + "-1&idSubtable=1&filter_pattern=^[1-9]\\d*$&filter_column=nb_plays&showColumns="
           + "label,nb_plays,nb_unique_visitors_impressions,nb_finishes")
   Flowable<Response<ResponseBody>> getResources(
           @Query("idSite") String idSite,
           @Query("token_auth") String token,
           @Query("date") String date);
 
-  @GET("/?module=API&method=MediaAnalytics.getVideoTitles&date=today&period=day&format=json&idSubtable=1"
+  @GET("/?module=API&method=MediaAnalytics.getVideoTitles&period=day&format=json&idSubtable=1"
           + "&filter_limit=-1&secondaryDimension=media_segments")
   Flowable<Response<ResponseBody>> getSegments(
           @Query("idSite") String idSite,
-          @Query("token") String token,
-          @Query("segment") String source);
+          @Query("token_auth") String token,
+          @Query("segment") String source,
+          @Query("date") String date);
 }

@@ -51,12 +51,14 @@ public final class ConfigFile {
   private static final String MATOMO_URI = "matomo.uri";
   private static final String MATOMO_SITEID = "matomo.siteid";
   private static final String MATOMO_TOKEN = "matomo.token";
+  private static final String MATOMO_RATE = "matomo.rate-limit";
   // Opencast options
   private static final String OPENCAST_URI = "opencast.external-api.uri";
   private static final String OPENCAST_USER = "opencast.external-api.user";
   private static final String OPENCAST_PASSWORD = "opencast.external-api.password";
   private static final String OPENCAST_CACHE_SIZE = "opencast.external-api.max-cache-size";
   private static final String OPENCAST_EXPIRATION_DURATION = "opencast.external-api.cache-expiration-duration";
+  private static final String OPENCAST_RATE = "opencast.rate-limit";
   // Path to last date file
   private static final String ADAPTER_PATH = "adapter.date-file";
   // Config objects
@@ -90,31 +92,38 @@ public final class ConfigFile {
       System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
     }
 
-    // Parse InfluxDB config
-    final String influxDbUser = parsed.getProperty(INFLUXDB_USER);
-    if (influxDbUser.isEmpty()) {
-      LOGGER.error("Error parsing config file \"{}\": {} cannot be empty", p, INFLUXDB_USER);
+    final Path pathToLastDate = Path.of(parsed.getProperty(ADAPTER_PATH));
+
+    // Initialized the ConfigFile Object with filled in properties for both InfluxDB and Opencast
+    return new ConfigFile(initInfluxDB(parsed, p),
+                          initMatomo(parsed, p),
+                          initOpencast(parsed, p),
+                          pathToLastDate);
+  }
+
+  private static int checkIntProperty(final String name, final String def, final Properties parsed, final Path p) {
+
+    int value = 0;
+    try {
+      value = Integer.parseInt(parsed.getProperty(name, def));
+      if (value < 0) {
+        LOGGER.error(
+                "Error parsing config file \"{}\": {} must be a positive value such as {}",
+                p, name, def);
+        System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
+      }
+    } catch (final NumberFormatException e) {
+      LOGGER.error(
+              "Error parsing config file \"{}\": {} must be a positive value such as {}",
+              p, name, def);
       System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
     }
-    final String influxDbDbName = parsed.getProperty(INFLUXDB_DB_NAME);
-    if (influxDbDbName.isEmpty()) {
-      LOGGER.error("Error parsing config file \"{}\": {} cannot be empty", p, INFLUXDB_DB_NAME);
-      System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
-    }
 
-    /*
-     * TODO: Add check for Matomo config - valid SiteID and token
-     */
+    return value;
 
-    // Parse Matomo config
-    final String matomoHost = parsed.getProperty(MATOMO_URI);
-    final String matomoSiteId = parsed.getProperty(MATOMO_SITEID);
-    final String matomoToken = parsed.getProperty(MATOMO_TOKEN);
+  }
 
-    // Create new Matomo config object
-    final MatomoConfig matomoConfig = matomoHost != null && matomoSiteId != null && matomoToken != null ?
-            new MatomoConfig(matomoHost, matomoSiteId, matomoToken) :
-            null;
+  private static OpencastConfig initOpencast(final Properties parsed, final Path p) {
 
     // Parse Opencast config
     final String opencastHost = parsed.getProperty(OPENCAST_URI);
@@ -137,40 +146,56 @@ public final class ConfigFile {
       System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
     }
 
-    int opencastCacheSize = 0;
-    try {
-      opencastCacheSize = Integer.parseInt(parsed.getProperty(OPENCAST_CACHE_SIZE, "1000"));
-      if (opencastCacheSize < 0) {
-        LOGGER.error(
-                "Error parsing config file \"{}\": {} must be a positive value such as \"1000\"",
-                p, OPENCAST_CACHE_SIZE);
-        System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
-      }
-    } catch (final NumberFormatException e) {
-      LOGGER.error(
-              "Error parsing config file \"{}\": {} must be a positive value such as \"1000\"",
-              p, OPENCAST_CACHE_SIZE);
+    final int opencastCacheSize = checkIntProperty(OPENCAST_CACHE_SIZE, "1000", parsed, p);
+    final int opencastRateLimit = checkIntProperty(OPENCAST_RATE, "10", parsed, p);
+
+    // Create new Opencast config object
+    return opencastHost != null && opencastUser != null && opencastPassword != null ?
+            new OpencastConfig(opencastHost, opencastUser, opencastPassword,
+                    opencastCacheSize, opencastCacheExpirationDuration, opencastRateLimit) :
+            null;
+
+  }
+
+  private static MatomoConfig initMatomo(final Properties parsed, final Path p) {
+
+    /*
+     * TODO: Add check for Matomo config - valid SiteID and token
+     */
+
+    // Parse Matomo config
+    final String matomoHost = parsed.getProperty(MATOMO_URI);
+    final String matomoSiteId = parsed.getProperty(MATOMO_SITEID);
+    final String matomoToken = parsed.getProperty(MATOMO_TOKEN);
+
+    final int matomoRateLimit = checkIntProperty(MATOMO_RATE, "10", parsed, p);
+
+    // Create new Matomo config object
+    return matomoHost != null && matomoSiteId != null && matomoToken != null ?
+            new MatomoConfig(matomoHost, matomoSiteId, matomoToken, matomoRateLimit) :
+            null;
+  }
+
+  private static InfluxDBConfig initInfluxDB(final Properties parsed, final Path p) {
+
+    // Parse InfluxDB config
+    final String influxDbUser = parsed.getProperty(INFLUXDB_USER);
+    if (influxDbUser.isEmpty()) {
+      LOGGER.error("Error parsing config file \"{}\": {} cannot be empty", p, INFLUXDB_USER);
+      System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
+    }
+    final String influxDbDbName = parsed.getProperty(INFLUXDB_DB_NAME);
+    if (influxDbDbName.isEmpty()) {
+      LOGGER.error("Error parsing config file \"{}\": {} cannot be empty", p, INFLUXDB_DB_NAME);
       System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
     }
 
-    // Create new Opencast config object
-    final OpencastConfig opencastConfig = opencastHost != null && opencastUser != null && opencastPassword != null ?
-            new OpencastConfig(opencastHost, opencastUser, opencastPassword,
-                    opencastCacheSize, opencastCacheExpirationDuration) :
-            null;
-
-    final Path pathToLastDate = Path.of(parsed.getProperty(ADAPTER_PATH));
-
-    // Initialized the ConfigFile Object with filled in properties for both InfluxDB and Opencast
-    return new ConfigFile(new InfluxDBConfig(parsed.getProperty(INFLUXDB_URI),
-                                             influxDbUser,
-                                             parsed.getProperty(INFLUXDB_PASSWORD),
-                                             influxDbDbName,
-                                             parsed.getProperty(INFLUXDB_RETENTION_POLICY),
-                                             parsed.getProperty(INFLUXDB_LOG_LEVEL, "info")),
-                          matomoConfig,
-                          opencastConfig,
-                          pathToLastDate);
+    return new InfluxDBConfig(parsed.getProperty(INFLUXDB_URI),
+            influxDbUser,
+            parsed.getProperty(INFLUXDB_PASSWORD),
+            influxDbDbName,
+            parsed.getProperty(INFLUXDB_RETENTION_POLICY),
+            parsed.getProperty(INFLUXDB_LOG_LEVEL, "info"));
   }
 
   public InfluxDBConfig getInfluxDBConfig() {

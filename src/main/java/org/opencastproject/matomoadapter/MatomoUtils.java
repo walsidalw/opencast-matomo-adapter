@@ -56,6 +56,7 @@ public final class MatomoUtils {
           list.add(jArray.getJSONObject(i));
         }
       }
+      Main.testT(list.size());
       return list;
     } catch (final JSONException e) {
       throw new ParsingJsonSyntaxException(json);
