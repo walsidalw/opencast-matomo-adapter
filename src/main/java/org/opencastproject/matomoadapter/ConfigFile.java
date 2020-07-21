@@ -60,24 +60,30 @@ public final class ConfigFile {
   private static final String OPENCAST_EXPIRATION_DURATION = "opencast.external-api.cache-expiration-duration";
   private static final String OPENCAST_RATE = "opencast.rate-limit";
   // Path to last date file
-  private static final String ADAPTER_PATH = "adapter.date-file";
+  private static final String ADAPTER_PATH_DATE = "adapter.date-file";
   // Config objects
   private final InfluxDBConfig influxDBConfig;
   private final MatomoConfig matomoConfig;
   private final OpencastConfig opencastConfig;
-  private final Path time;
+  private final Path lastDatePath;
 
   private ConfigFile(
           final InfluxDBConfig influxDBConfig,
           final MatomoConfig matomoConfig,
           final OpencastConfig opencastConfig,
-          final Path time) {
+          final Path lastDatePath) {
     this.influxDBConfig = influxDBConfig;
     this.matomoConfig = matomoConfig;
     this.opencastConfig = opencastConfig;
-    this.time = time;
+    this.lastDatePath = lastDatePath;
   }
 
+  /**
+   * Read and parse config file. Also check for faulty values in critical fields.
+   *
+   * @param p Path to config file
+   * @return creates and returns config object with all properties saved within
+   */
   public static ConfigFile readFile(final Path p) {
     final Properties parsed = new Properties();
 
@@ -92,15 +98,25 @@ public final class ConfigFile {
       System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
     }
 
-    final Path pathToLastDate = Path.of(parsed.getProperty(ADAPTER_PATH));
+    // Path to file with last update date
+    final Path pathToLastDate = Path.of(parsed.getProperty(ADAPTER_PATH_DATE));
 
-    // Initialized the ConfigFile Object with filled in properties for both InfluxDB and Opencast
+    // Initialized the ConfigFile Object with filled in properties for InfluxDB, Matomo and Opencast
     return new ConfigFile(initInfluxDB(parsed, p),
                           initMatomo(parsed, p),
                           initOpencast(parsed, p),
                           pathToLastDate);
   }
 
+  /**
+   * Helper method to parse numerical values.
+   *
+   * @param name Name of the field
+   * @param def Default value
+   * @param parsed Properties object
+   * @param p Path to config file
+   * @return The parsed value
+   */
   private static int checkIntProperty(final String name, final String def, final Properties parsed, final Path p) {
 
     int value = 0;
@@ -120,9 +136,15 @@ public final class ConfigFile {
     }
 
     return value;
-
   }
 
+  /**
+   * Parses config file and initializes Opencast config object.
+   *
+   * @param parsed Properties object
+   * @param p Path to config file
+   * @return Opencast config object
+   */
   private static OpencastConfig initOpencast(final Properties parsed, final Path p) {
 
     // Parse Opencast config
@@ -157,6 +179,13 @@ public final class ConfigFile {
 
   }
 
+  /**
+   * Parses config file and initializes Matomo config object.
+   *
+   * @param parsed Properties object
+   * @param p Path to config file
+   * @return Matomo config object
+   */
   private static MatomoConfig initMatomo(final Properties parsed, final Path p) {
 
     /*
@@ -168,7 +197,7 @@ public final class ConfigFile {
     final String matomoSiteId = parsed.getProperty(MATOMO_SITEID);
     final String matomoToken = parsed.getProperty(MATOMO_TOKEN);
 
-    final int matomoRateLimit = checkIntProperty(MATOMO_RATE, "10", parsed, p);
+    final int matomoRateLimit = checkIntProperty(MATOMO_RATE, "0", parsed, p);
 
     // Create new Matomo config object
     return matomoHost != null && matomoSiteId != null && matomoToken != null ?
@@ -176,6 +205,13 @@ public final class ConfigFile {
             null;
   }
 
+  /**
+   * Parses config file and initializes InfluxDB config object.
+   *
+   * @param parsed Properties object
+   * @param p Path to config file
+   * @return InfluxDB config object
+   */
   private static InfluxDBConfig initInfluxDB(final Properties parsed, final Path p) {
 
     // Parse InfluxDB config
@@ -210,5 +246,5 @@ public final class ConfigFile {
     return this.opencastConfig;
   }
 
-  public Path getPathToTime() { return this.time; }
+  public Path getPathToDate() { return this.lastDatePath; }
 }

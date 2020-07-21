@@ -23,8 +23,6 @@ package org.opencastproject.matomoadapter;
 
 import org.slf4j.LoggerFactory;
 
-import java.time.LocalDate;
-
 import devcsrj.okhttp3.logging.HttpLoggingInterceptor;
 import io.reactivex.Flowable;
 import okhttp3.Interceptor;
@@ -51,8 +49,11 @@ public final class MatomoClient {
   public MatomoClient(final MatomoConfig matomoConfig) {
     this.matomoConfig = matomoConfig;
     final Interceptor interceptor = new HttpLoggingInterceptor();
-    final Interceptor limit = new LimitInterceptor(matomoConfig.getRate());
-    this.client = new OkHttpClient.Builder().addInterceptor(interceptor).addInterceptor(limit).build();
+    final OkHttpClient.Builder b = new OkHttpClient.Builder().addInterceptor(interceptor);
+    /*this.client = matomoConfig.getRate() != 0 ?
+            b.addInterceptor(new LimitInterceptor(matomoConfig.getRate())).build() :
+            b.build();*/
+    this.client = b.build();
   }
 
   /**
@@ -71,24 +72,34 @@ public final class MatomoClient {
 
   /**
    * Send a HTTP GET request to the Matomo MediaAnalytics.getVideoResources API. The expected response
-   * is a JSONArray containing all relevant statistical data for every episode played at least once in
-   * the time frame between (server) hour and now.
+   * is a JSONArray containing all relevant statistical data for every episode played at least once on
+   * the specified date.
    *
    * @param idSite Site ID from the config file
    * @param token Auth token for Matomo API from the config file
-   * @param hour Server time; acts as time frame for the request (all views since)
-   * @return Raw response to the request
+   * @param date Date for requested statistics
+   * @return Raw response to the request (JSONArray)
    */
   public Flowable<Response<ResponseBody>> getResourcesRequest(final String idSite, final String token,
                                                               final String date) {
-    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoResources, time: {}", date);
+    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoResources, date: {}", date);
     return getClient().getResources(idSite, token, date);
   }
 
+  /**
+   * Send a HTTP GET request to the Matomo MediaAnalytics.getVideoTitles API. More specifically all 30
+   * second segments for an episode are requested. The expected response is an JSONArray containing
+   * statistical data for each video segment from the specified date.
+   *
+   * @param idSite Site ID from the config file
+   * @param token Auth token for Matomo API from the config file
+   * @param episodeID EpisodeID of the video
+   * @param date Date for requested statistics
+   * @return Raw response to the request (JSONArray)
+   */
   public Flowable<Response<ResponseBody>> getSegmentsRequest(final String idSite, final String token,
-          final String source) {
-    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoSegments, episodeId: {}", source);
-    LocalDate date = LocalDate.now();
-    return getClient().getSegments(idSite, token, source, date.toString());
+                                                             final String episodeID, final String date) {
+    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoSegments, episodeId: {}", episodeID);
+    return getClient().getSegments(idSite, token, "media_resource%3D@" + episodeID, date);
   }
 }

@@ -26,8 +26,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import io.reactivex.Flowable;
 import okhttp3.ResponseBody;
@@ -48,7 +50,7 @@ public final class MatomoUtils {
    * @return ArrayList with separate JSONObjects containing statistics for each episode
    */
   private static ArrayList<JSONObject> getResourcesJson(final String json) {
-    try{
+    try {
       final JSONArray jArray = new JSONArray(json);
       final ArrayList<JSONObject> list = new ArrayList<>();
       if (jArray.length() != 0) {
@@ -70,7 +72,7 @@ public final class MatomoUtils {
    * @param client Matomo client instance
    * @param idSite Site ID from config file
    * @param token Auth token for Matomo API from config file
-   * @param hour Server time; acts as time frame for the request (all views since)
+   * @param date Date for request
    * @return Returns Flowable with JSONObjects containing episode statistics
    */
   public static Flowable<JSONObject> getResources(
@@ -88,6 +90,45 @@ public final class MatomoUtils {
   }
 
   /**
+   * Invoke a request to the Matomo MediaAnalytics.getVideoTitles API and filter out empty responses.
+   *
+   * @param logger Logger Object from Main
+   * @param client Matomo client instance
+   * @param idSite Site ID from config file
+   * @param token Auth token for Matomo API from config file
+   * @param episodeID Episode for which segment information shall be retrieved
+   * @param date Date for request
+   * @return Returns Flowable with Strings containing segment statistics
+   */
+  private static Flowable<String> getSegments(
+          final Logger logger,
+          final MatomoClient client,
+          final String idSite,
+          final String token,
+          final String episodeID,
+          final String date) {
+    logger.info("Retrieving segments");
+    return client
+            .getSegmentsRequest(idSite, token, episodeID, date)
+            .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
+            .filter(x -> x.length() > 2);
+  }
+
+  public static Flowable<Segments> makeSegmentsImpression(
+          final Logger logger,
+          final MatomoClient client,
+          final String episodeID,
+          final String idSite,
+          final String token,
+          final String date,
+          final OffsetDateTime time) {
+
+    return getSegments(logger, client, idSite, token, episodeID, date)
+            .flatMap(json -> Flowable.just(new Segments(episodeID, "mh_default", json, time)));
+  }
+
+
+  /**
    * Filter out invalid HTTP requests
    *
    * @param x The HTTP response we got
@@ -99,9 +140,9 @@ public final class MatomoUtils {
           final Response<? extends ResponseBody> x) {
     final boolean correctResponse = x.code() / 200 == 1;
     if (!correctResponse) {
-      logger.error("Fehlerhafter code: {}", x.code());
+      logger.error("MATHTTPERROR: code: {}", x.code());
     } else {
-      logger.debug("OCHTTPSUCCESS");
+      logger.debug("MATHTTPSUCCESS");
     }
     return correctResponse ?
             Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string()) :

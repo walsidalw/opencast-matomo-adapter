@@ -63,9 +63,7 @@ public final class InfluxDBConfig {
     return this.db;
   }
 
-  public String getRetentionPolicy() {
-    return this.retentionPolicy;
-  }
+  public String getRetentionPolicy() { return this.retentionPolicy; }
 
   public String getLogLevel() {
     return this.logLevel;

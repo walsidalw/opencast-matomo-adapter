@@ -28,6 +28,9 @@ import java.io.IOException;
 import okhttp3.Interceptor;
 import okhttp3.Response;
 
+/**
+ * HTTP interceptor for rate limiting. RateLimiter is marked as beta.
+ */
 public class LimitInterceptor implements Interceptor {
 
   private final RateLimiter rateLimiter;
@@ -37,9 +40,8 @@ public class LimitInterceptor implements Interceptor {
   }
 
   @Override
-  public Response intercept(Chain chain) throws IOException {
+  public Response intercept(final Chain chain) throws IOException {
     this.rateLimiter.acquire(1);
     return chain.proceed(chain.request());
   }
-
 }

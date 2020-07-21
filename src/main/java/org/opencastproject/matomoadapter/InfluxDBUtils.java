@@ -24,9 +24,20 @@ package org.opencastproject.matomoadapter;
 import org.influxdb.InfluxDB;
 import org.influxdb.InfluxDBFactory;
 import org.influxdb.InfluxDBIOException;
+import org.influxdb.dto.BatchPoints;
 import org.influxdb.dto.Point;
 import org.influxdb.dto.Pong;
+import org.influxdb.dto.Query;
+import org.influxdb.dto.QueryResult;
+import org.influxdb.impl.InfluxDBResultMapper;
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import io.reactivex.Flowable;
 
 /**
  * Contains utility functions related to InfluxDB
@@ -34,7 +45,146 @@ import org.slf4j.LoggerFactory;
 public final class InfluxDBUtils {
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
-  private InfluxDBUtils() {
+  private BatchPoints batch;
+  private final ArrayList<Impression> filterList;
+
+  // TEST TEST TEST TEST
+  private int count = 0;
+
+  public InfluxDBUtils(final InfluxDBConfig config) {
+    this.batch = BatchPoints.database(config.getDb()).retentionPolicy(config.getRetentionPolicy()).build();
+    this.filterList = new ArrayList<>();
+  }
+
+  /**
+   * Checks all emitted Impressions for duplicates. Duplicates are merged into one Impression.
+   *
+   * @param newImpression Newly emitted Impression
+   */
+  public void addToFilter(final Impression newImpression) {
+
+    final String episodeId = newImpression.getEpisodeId();
+
+    // If the list already contains an Impression with the same episodeID as the new Impression, merge
+    // both into one Impression.
+    if (this.filterList.contains(newImpression)) {
+
+      final Impression old = this.filterList.get(this.filterList.indexOf(newImpression));
+      // Merge stats of old and new Impression
+      final int plays = old.getPlays() + newImpression.getPlays();
+      final int visitors = old.getVisitors() + newImpression.getVisitors();
+      final int finishes = old.getFinishes() + newImpression.getFinishes();
+
+      final Impression combined = new Impression(episodeId, old.getOrganizationId(), old.getSeriesId(),
+                                                plays, visitors, finishes, old.getDate());
+
+      this.filterList.remove(old);
+      this.filterList.add(combined);
+
+    }
+    else {
+      this.filterList.add(newImpression);
+    }
+  }
+
+  public ArrayList<Impression> getFilteredList() { return this.filterList; }
+
+  public void addToBatch(final Point p) {
+    // TEST TEST TEST TEST TEST
+    count++;
+    System.out.println("Count of points: " + count);
+    this.batch.point(p);
+  }
+
+  private static List<SegmentsPoint> getPointFromDB(final InfluxDB influxDB, final String db, final String episodeId) {
+    final QueryResult queryResult = influxDB.query(new Query(
+            "SELECT * FROM opencast1.infinite.segments_daily WHERE episodeId='" + episodeId + "'", db));
+
+    final InfluxDBResultMapper resultMapper = new InfluxDBResultMapper();
+    final List<SegmentsPoint> segmentsPointList = resultMapper.toPOJO(queryResult, SegmentsPoint.class);
+
+    return segmentsPointList.isEmpty() ? null : segmentsPointList;
+  }
+
+  public static Flowable<Point> checkSegments(final Segments seg, final InfluxDB influxDB) throws JSONException {
+    final String episodeId = seg.getEpisodeId();
+    // check if record in db is present
+    // If not: return Flowable.just(Segments::toPoint)
+    // combine pojo with segment
+    // save pojo, return Flowable.empty
+    List<SegmentsPoint> list = getPointFromDB(influxDB, "opencast1", episodeId);
+    if (list != null) {
+
+      // Extract JSONArray from POJO list and from Segments
+      // Combine the two JSONArrays
+      // Set new JSONArray segments in POJO (toString!)
+
+      JSONArray arrayPOJO = new JSONArray(list.get(0).getSegments());
+      JSONArray arraySeg = new JSONArray(seg.getSegments());
+
+      for (int i = 0; i < arrayPOJO.length(); i++) {
+
+
+
+      }
+
+      return Flowable.empty();
+    } else {
+      return Flowable.just(seg.toPoint());
+    }
+  }
+
+  /**
+   * Push the whole batch to InfluxDB.
+   *
+   * @param influxDB A connected InfluxDB instance
+   */
+  public void writeBatch(final InfluxDB influxDB) {
+    try {
+      final Pong pong = influxDB.ping();
+      if (!pong.isGood()) {
+        LOGGER.error("INFLUXPINGERROR, not good");
+      }
+    } catch (final InfluxDBIOException e) {
+      LOGGER.error("INFLUXPINGERROR, {}", e.getMessage());
+    }
+
+    influxDB.write(this.batch);
+
+    final String rp = this.batch.getRetentionPolicy();
+    final String db = this.batch.getDatabase();
+    this.batch = BatchPoints.database(db).retentionPolicy(rp).build();
+  }
+
+  /**
+   * Connect and configure InfluxDB from a configuration
+   *
+   * @param config InfluxDB configuration
+   * @return A connected InfluxDB instance
+   */
+  public static InfluxDB connect(final InfluxDBConfig config) {
+    InfluxDB influxDB = null;
+    try {
+      influxDB = InfluxDBFactory.connect(config.getHost(), config.getUser(), config.getPassword());
+
+      influxDB.setDatabase(config.getDb());
+      influxDB.enableBatch();
+      if (config.getLogLevel().equals("debug")) {
+        influxDB.setLogLevel(InfluxDB.LogLevel.FULL);
+      } else if (config.getLogLevel().equals("info")) {
+        influxDB.setLogLevel(InfluxDB.LogLevel.BASIC);
+      } else {
+        LOGGER.error(
+                "Invalid InfluxDB log level \"" + config.getLogLevel() + "\": available are \"debug\" and \"info\"");
+        System.exit(ExitStatuses.INVALID_INFLUXDB_CONFIG);
+      }
+      return influxDB;
+    } catch (final Exception e) {
+      if (influxDB != null) {
+        influxDB.close();
+      }
+      throw e;
+    }
   }
 
   /**
@@ -56,35 +206,5 @@ public final class InfluxDBUtils {
       influxDB.write(config.getDb(), config.getRetentionPolicy(), p);
     else
       influxDB.write(p);
-  }
-
-  /**
-   * Connect and configure InfluxDB from a configuration
-   * @param config InfluxDB configuration
-   * @return A connected InfluxDB instance
-   */
-  public static InfluxDB connect(final InfluxDBConfig config) {
-    InfluxDB influxDB = null;
-    try {
-      influxDB = InfluxDBFactory.connect(config.getHost(), config.getUser(), config.getPassword());
-
-      //influxDB.setDatabase(config.getDb());
-      influxDB.enableBatch();
-      if (config.getLogLevel().equals("debug")) {
-        influxDB.setLogLevel(InfluxDB.LogLevel.FULL);
-      } else if (config.getLogLevel().equals("info")) {
-        influxDB.setLogLevel(InfluxDB.LogLevel.BASIC);
-      } else {
-        LOGGER.error(
-                "Invalid InfluxDB log level \"" + config.getLogLevel() + "\": available are \"debug\" and \"info\"");
-        System.exit(ExitStatuses.INVALID_INFLUXDB_CONFIG);
-      }
-      return influxDB;
-    } catch (final Exception e) {
-      if (influxDB != null) {
-        influxDB.close();
-      }
-      throw e;
-    }
   }
 }

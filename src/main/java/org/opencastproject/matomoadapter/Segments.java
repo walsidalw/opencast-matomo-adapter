@@ -30,29 +30,20 @@ import java.util.concurrent.TimeUnit;
 /**
  * An Impression is an object containing all necessary metadata to write to the InfluxDB (immutable)
  */
-public final class Impression {
+public final class Segments {
   private final String episodeId;
   private final String organizationId;
-  private final String seriesId;
-  private final int plays;
-  private final int visitors;
-  private final int finishes;
+  private final String segments;
   private final OffsetDateTime date;
 
-  public Impression(
+  public Segments(
           final String episodeId,
           final String organizationId,
-          final String seriesId,
-          final int plays,
-          final int visitors,
-          final int finishes,
+          final String segments,
           final OffsetDateTime date) {
     this.episodeId = episodeId;
     this.organizationId = organizationId;
-    this.seriesId = seriesId;
-    this.plays = plays;
-    this.visitors = visitors;
-    this.finishes = finishes;
+    this.segments = segments;
     this.date = date;
   }
 
@@ -62,46 +53,19 @@ public final class Impression {
    */
   public Point toPoint() {
     return Point
-            .measurement("impressions_daily")
+            .measurement("segments_daily")
             .time(this.date.toInstant().getEpochSecond(), TimeUnit.SECONDS)
-            .addField("plays", this.plays)
-            .addField("visitors", this.visitors)
-            .addField("finishes", this.finishes)
-            .tag("seriesId", this.seriesId)
-            //.tag("seriesId", "2c2b6898-a1af-4b97-8b86-d72ad26d34dc")
+            .addField("segments", this.segments)
             .tag("organizationId", this.organizationId)
-            //.tag("organizationId", this.organizationId)
             .tag("episodeId", this.episodeId)
-            //.tag("episodeId", "6d26d029-9238-4b6e-aa26-97983b88f614")
             .build();
   }
 
-  @Override
-  public boolean equals(final Object o) {
-    if (this == o)
-      return true;
-    if (o == null || getClass() != o.getClass())
-      return false;
-    final Impression impression = (Impression) o;
-    return this.organizationId.equals(impression.organizationId) && this.episodeId.equals(impression.episodeId);
+  public String getEpisodeId() {
+    return this.episodeId;
   }
 
-  @Override
-  public int hashCode() {
-    return Objects.hash(this.organizationId, this.episodeId);
+  public String getSegments() {
+    return this.segments;
   }
-
-  public String getEpisodeId() { return this.episodeId; }
-
-  public String getOrganizationId() { return this.organizationId; }
-
-  public String getSeriesId() { return this.seriesId; }
-
-  public int getPlays() { return this.plays; }
-
-  public int getVisitors() { return this.visitors; }
-
-  public int getFinishes() { return this.finishes; }
-
-  public OffsetDateTime getDate() { return this.date; }
 }

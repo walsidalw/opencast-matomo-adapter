@@ -81,7 +81,7 @@ public final class Main {
     // Preliminaries: command line parsing, config file parsing
     final CommandLine commandLine = CommandLine.parse(args);
     final ConfigFile configFile = ConfigFile.readFile(commandLine.getConfigFile());
-    final Path p = configFile.getPathToTime();
+    final Path p = configFile.getPathToDate();
 
     // Log configuration
     configureLogManually();
@@ -146,8 +146,9 @@ public final class Main {
 
     for (int i = days; i > 0; i--) {
 
+      final int j = i;
       final OffsetDateTime queryDate = OffsetDateTime.now().minusDays(i);
-      final InfluxDBBatch batch = new InfluxDBBatch(configFile.getInfluxDBConfig());
+      final InfluxDBUtils influxUtil = new InfluxDBUtils(configFile.getInfluxDBConfig());
 
       MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
               configFile.getMatomoConfig().getToken(), dateNow.minusDays(i).toString())
@@ -155,20 +156,36 @@ public final class Main {
               .runOn(Schedulers.io())
               .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, queryDate, viewed, count))
               .sequential()
-              .blockingSubscribe(batch::addToFilter, Main::processError, 2048);
+              .blockingSubscribe(influxUtil::addToFilter, Main::processError, 2048);
 
-      Flowable.just(batch.getFilteredList()).flatMapIterable(impression -> impression)
+      Flowable.just(influxUtil.getFilteredList()).flatMapIterable(impression -> impression)
               .parallel()
               .runOn(Schedulers.io())
               .map(Impression::toPoint)
               .sequential()
-              .blockingSubscribe(batch::addToBatch, Main::processError, 2048);
+              .blockingSubscribe(influxUtil::addToBatch, Main::processError, 2048);
 
-      batch.writeBatch(influxDB);
+      influxUtil.writeBatch(influxDB);
       System.out.println("Size of the queue: " + viewed.size());
+
+      Flowable.just(viewed).flatMapIterable(seg -> seg).parallel()
+              .runOn(Schedulers.io())
+              .flatMap(episode -> MatomoUtils.makeSegmentsImpression(LOGGER, matClient, episode,
+                      configFile.getMatomoConfig().getSiteId(),
+                      configFile.getMatomoConfig().getToken(),
+                      dateNow.minusDays(j).toString(),
+                      queryDate))
+              .sequential()
+              .flatMap(seg -> InfluxDBUtils.checkSegments(seg, influxDB))
+              .blockingSubscribe(influxUtil::addToBatch, Main::processError, 2048);
+              /*.blockingSubscribe(p -> InfluxDBUtils.writePointToInflux(configFile.getInfluxDBConfig(), influxDB, p),
+                      Main::processError,
+                      2048);*/
+      influxUtil.writeBatch(influxDB);
+
       viewed.clear();
 
-      System.out.println(batch.getFilteredList().size());
+      System.out.println(influxUtil.getFilteredList().size());
     }
     System.out.println("Saved Opencast requests: " + count.size());
   }
