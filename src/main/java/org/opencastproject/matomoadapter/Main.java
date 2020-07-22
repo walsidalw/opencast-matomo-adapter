@@ -150,12 +150,15 @@ public final class Main {
       final OffsetDateTime queryDate = OffsetDateTime.now().minusDays(i);
       final InfluxDBUtils influxUtil = new InfluxDBUtils(configFile.getInfluxDBConfig());
 
+      // First, get all statistical data for all viewed episodes on given date
       MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
               configFile.getMatomoConfig().getToken(), dateNow.minusDays(i).toString())
               .parallel()
               .runOn(Schedulers.io())
               .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, queryDate, viewed, count))
               .sequential()
+              // There can be multiple entries for the same episode. Filter all entries and combine entries
+              // for the same episode.
               .blockingSubscribe(influxUtil::addToFilter, Main::processError, 2048);
 
       Flowable.just(influxUtil.getFilteredList()).flatMapIterable(impression -> impression)

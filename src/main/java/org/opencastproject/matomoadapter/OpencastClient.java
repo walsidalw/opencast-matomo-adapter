@@ -25,12 +25,14 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.concurrent.TimeUnit;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 
 import devcsrj.okhttp3.logging.HttpLoggingInterceptor;
 import io.reactivex.Flowable;
+import io.reactivex.schedulers.Schedulers;
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.ResponseBody;
@@ -56,9 +58,18 @@ public final class OpencastClient {
    */
   public OpencastClient(final OpencastConfig opencastConfig) {
     this.opencastConfig = opencastConfig;
+    // Initialize HTTP client for Opencast network requests
     final Interceptor interceptor = new HttpLoggingInterceptor();
-    //final LimitInterceptor limit = new LimitInterceptor(opencastConfig.getRate());
-    this.client = new OkHttpClient.Builder().addInterceptor(interceptor).build();//.addInterceptor(limit).build();
+    final OkHttpClient.Builder b = new OkHttpClient.Builder().addInterceptor(interceptor)
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS);
+    // Add rate limiter in case network traffic needs to be throttled
+    this.client = opencastConfig.getRate() != 0 ?
+            b.addInterceptor(new LimitInterceptor(opencastConfig.getRate())).build() :
+            b.build();
+
+    // Initialize cache, if needed
     this.cache = opencastConfig != null && !opencastConfig.getCacheDuration().isZero()
             && opencastConfig.getCacheSize() != 0 ?
             CacheBuilder.newBuilder()
@@ -78,6 +89,10 @@ public final class OpencastClient {
   }
 
   public Flowable<Response<ResponseBody>> getEventRequest(final String organization, final String episodeId) {
+    /*
+     * TODO: Add timeout exception handling -> retries!
+     */
+
     LOGGER.debug("OCREQUESTSTART, episode {}, organization {}", episodeId, organization);
     return getClient().getEvent(episodeId, getAuthHeader());
   }

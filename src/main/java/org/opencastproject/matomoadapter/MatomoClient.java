@@ -23,6 +23,9 @@ package org.opencastproject.matomoadapter;
 
 import org.slf4j.LoggerFactory;
 
+import java.sql.Time;
+import java.util.concurrent.TimeUnit;
+
 import devcsrj.okhttp3.logging.HttpLoggingInterceptor;
 import io.reactivex.Flowable;
 import okhttp3.Interceptor;
@@ -48,12 +51,17 @@ public final class MatomoClient {
    */
   public MatomoClient(final MatomoConfig matomoConfig) {
     this.matomoConfig = matomoConfig;
+    // Initialize HTTP client for Matomo network requests
     final Interceptor interceptor = new HttpLoggingInterceptor();
-    final OkHttpClient.Builder b = new OkHttpClient.Builder().addInterceptor(interceptor);
-    /*this.client = matomoConfig.getRate() != 0 ?
+    final OkHttpClient.Builder b = new OkHttpClient.Builder()
+            .addInterceptor(interceptor)
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS);
+    // Add rate limiter in case network traffic needs to be throttled
+    this.client = matomoConfig.getRate() != 0 ?
             b.addInterceptor(new LimitInterceptor(matomoConfig.getRate())).build() :
-            b.build();*/
-    this.client = b.build();
+            b.build();
   }
 
   /**

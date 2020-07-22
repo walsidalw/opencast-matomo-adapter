@@ -66,7 +66,7 @@ public final class CommandLine {
       System.exit(ExitStatuses.INVALID_COMMAND_LINE_ARGS);
     }
     return new CommandLine(
-            Paths.get(parsed.getOptionValue(CONFIG_FILE, "/home/kleinfach/opencast-matomo-adapter/docs/opencast-matomo-adapter.properties")));
+            Paths.get(parsed.getOptionValue(CONFIG_FILE)));
   }
 
   public Path getConfigFile() {

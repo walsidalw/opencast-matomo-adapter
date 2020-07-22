@@ -169,7 +169,7 @@ public final class ConfigFile {
     }
 
     final int opencastCacheSize = checkIntProperty(OPENCAST_CACHE_SIZE, "1000", parsed, p);
-    final int opencastRateLimit = checkIntProperty(OPENCAST_RATE, "10", parsed, p);
+    final int opencastRateLimit = checkIntProperty(OPENCAST_RATE, "0", parsed, p);
 
     // Create new Opencast config object
     return opencastHost != null && opencastUser != null && opencastPassword != null ?
