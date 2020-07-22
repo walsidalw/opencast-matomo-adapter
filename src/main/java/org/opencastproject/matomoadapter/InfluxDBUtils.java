@@ -32,6 +32,7 @@ import org.influxdb.dto.QueryResult;
 import org.influxdb.impl.InfluxDBResultMapper;
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
@@ -112,21 +113,39 @@ public final class InfluxDBUtils {
     // If not: return Flowable.just(Segments::toPoint)
     // combine pojo with segment
     // save pojo, return Flowable.empty
-    List<SegmentsPoint> list = getPointFromDB(influxDB, "opencast1", episodeId);
-    if (list != null) {
+
+    final QueryResult queryResult = influxDB.query(new Query(
+            "SELECT * FROM opencast1.infinite.segments_daily WHERE episodeId='" + episodeId + "'",
+            "opencast1"));
+
+    final InfluxDBResultMapper resultMapper = new InfluxDBResultMapper();
+    final List<SegmentsPoint> segmentsPointList = resultMapper.toPOJO(queryResult, SegmentsPoint.class);
+
+    if (!segmentsPointList.isEmpty()) {
 
       // Extract JSONArray from POJO list and from Segments
       // Combine the two JSONArrays
       // Set new JSONArray segments in POJO (toString!)
 
-      JSONArray arrayPOJO = new JSONArray(list.get(0).getSegments());
+      JSONArray arrayPOJO = new JSONArray(segmentsPointList.get(0).getSegments());
       JSONArray arraySeg = new JSONArray(seg.getSegments());
 
       for (int i = 0; i < arrayPOJO.length(); i++) {
 
+        JSONObject itemPOJO = (JSONObject)arrayPOJO.get(i);
+        JSONObject itemSeg = (JSONObject)arraySeg.get(i);
 
+        int plays = Integer.parseInt(itemPOJO.getString("nb_plays")) +
+                Integer.parseInt(itemSeg.getString("nb_plays"));
 
+        int rate = Integer.parseInt(itemPOJO.getString("play_rate")) +
+                Integer.parseInt(itemSeg.getString("play_rate"));
+
+        itemPOJO.put("nb_plays", String.valueOf(plays));
+        itemPOJO.put("play_rate", String.valueOf(rate));
       }
+
+      segmentsPointList.get(0).setSegments(arrayPOJO.toString());
 
       return Flowable.empty();
     } else {
