@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import io.reactivex.Flowable;
+import io.reactivex.internal.operators.maybe.MaybeMergeArray;
 import okhttp3.ResponseBody;
 import retrofit2.Response;
 
@@ -106,17 +107,24 @@ public final class OpencastUtils {
             .concatMap(body -> OpencastUtils.checkResponseCode(logger, body, organization, episodeId))
             .map(OpencastUtils::seriesForEventJson)
             .concatMap(series -> {
-              if (series.isPresent())
+              if (series.isPresent()) {
+
+                if (cache != null)
+                  cache.put(episodeId, series.get());
+                viewed.add(episodeId);
+                // TEST TEST TEST TEST
+                System.out.println(cache.size());
+
                 return Flowable.just(series.get());
-              return Flowable.just("");
-            }).doOnNext(seriesId -> {
+              }
+              return Flowable.empty();
+            });/*.doOnNext(seriesId -> {
               if (cache != null)
                 cache.put(episodeId, seriesId);
-              if(!viewed.contains(episodeId))
-                viewed.add(episodeId);
+              viewed.add(episodeId);
               // TEST TEST TEST TEST
               System.out.println(cache.size());
-            });
+            });*/
   }
 
   /**
@@ -172,10 +180,10 @@ public final class OpencastUtils {
     try {
       // Extract data from JSON
       final String label = json.getString("label");
-      final String eventId = getEventJson(label);
+      final String episodeId = getEventJson(label);
 
       // If the JSON label doesnt fit the pattern (e.g. Live Streams), the entry is evicted
-      if (eventId == null)
+      if (episodeId == null)
         return Flowable.empty();
 
       // Parse the remaining important data
@@ -184,8 +192,8 @@ public final class OpencastUtils {
       final int finishes = json.getInt("nb_finishes");
 
       // Create new Impression Flowable with series data from Opencast
-      return seriesForEvent(logger, client, "org", eventId, viewed, count)
-              .flatMap(series -> Flowable.just(new Impression(eventId, "mh_default_org",
+      return seriesForEvent(logger, client, "org", episodeId, viewed, count)
+              .flatMap(series -> Flowable.just(new Impression(episodeId, "mh_default_org",
                       series, plays, visits, finishes, time)));
 
     } catch (final JSONException e) {

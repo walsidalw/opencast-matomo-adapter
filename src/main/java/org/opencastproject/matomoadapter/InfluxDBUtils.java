@@ -29,6 +29,7 @@ import org.influxdb.dto.Point;
 import org.influxdb.dto.Pong;
 import org.influxdb.dto.Query;
 import org.influxdb.dto.QueryResult;
+import org.influxdb.impl.InfluxDBMapper;
 import org.influxdb.impl.InfluxDBResultMapper;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -93,7 +94,6 @@ public final class InfluxDBUtils {
   public void addToBatch(final Point p) {
     // TEST TEST TEST TEST TEST
     count++;
-    System.out.println("Count of points: " + count);
     this.batch.point(p);
   }
 
@@ -114,12 +114,15 @@ public final class InfluxDBUtils {
     // combine pojo with segment
     // save pojo, return Flowable.empty
 
-    final QueryResult queryResult = influxDB.query(new Query(
+    /*final QueryResult queryResult = influxDB.query(new Query(
             "SELECT * FROM opencast1.infinite.segments_daily WHERE episodeId='" + episodeId + "'",
-            "opencast1"));
+            "opencast1"));*/
 
-    final InfluxDBResultMapper resultMapper = new InfluxDBResultMapper();
-    final List<SegmentsPoint> segmentsPointList = resultMapper.toPOJO(queryResult, SegmentsPoint.class);
+    final InfluxDBMapper mapper = new InfluxDBMapper(influxDB);
+    final List<SegmentsPoint> segmentsPointList = mapper.query(new Query(
+            "SELECT * FROM opencast1.infinite.segments_daily WHERE episodeId='" + episodeId + "'",
+            "opencast1"), SegmentsPoint.class);
+    // final List<SegmentsPoint> segmentsPointList = resultMapper.toPOJO(queryResult, SegmentsPoint.class);
 
     if (!segmentsPointList.isEmpty()) {
 
@@ -138,8 +141,8 @@ public final class InfluxDBUtils {
         int plays = Integer.parseInt(itemPOJO.getString("nb_plays")) +
                 Integer.parseInt(itemSeg.getString("nb_plays"));
 
-        int rate = Integer.parseInt(itemPOJO.getString("play_rate")) +
-                Integer.parseInt(itemSeg.getString("play_rate"));
+        double rate = Double.parseDouble(itemPOJO.getString("play_rate")) +
+                Double.parseDouble(itemSeg.getString("play_rate"));
 
         itemPOJO.put("nb_plays", String.valueOf(plays));
         itemPOJO.put("play_rate", String.valueOf(rate));
@@ -147,6 +150,7 @@ public final class InfluxDBUtils {
 
       segmentsPointList.get(0).setSegments(arrayPOJO.toString());
 
+      mapper.save(segmentsPointList.get(0));
       return Flowable.empty();
     } else {
       return Flowable.just(seg.toPoint());
@@ -169,6 +173,8 @@ public final class InfluxDBUtils {
     }
 
     influxDB.write(this.batch);
+    // TEST TEST TEST TEST TEST
+    System.out.println("Count of points in batch: " + this.count);
 
     final String rp = this.batch.getRetentionPolicy();
     final String db = this.batch.getDatabase();

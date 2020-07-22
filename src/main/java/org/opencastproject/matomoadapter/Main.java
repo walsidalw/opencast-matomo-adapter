@@ -146,16 +146,16 @@ public final class Main {
 
     for (int i = days; i > 0; i--) {
 
-      final int j = i;
-      final OffsetDateTime queryDate = OffsetDateTime.now().minusDays(i);
+      final OffsetDateTime influxTime = OffsetDateTime.now().minusDays(i);
+      final String queryDate = dateNow.minusDays(i).toString();
       final InfluxDBUtils influxUtil = new InfluxDBUtils(configFile.getInfluxDBConfig());
 
       // First, get all statistical data for all viewed episodes on given date
       MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
-              configFile.getMatomoConfig().getToken(), dateNow.minusDays(i).toString())
+              configFile.getMatomoConfig().getToken(), queryDate)
               .parallel()
               .runOn(Schedulers.io())
-              .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, queryDate, viewed, count))
+              .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, influxTime, viewed, count))
               .sequential()
               // There can be multiple entries for the same episode. Filter all entries and combine entries
               // for the same episode.
@@ -169,26 +169,39 @@ public final class Main {
               .blockingSubscribe(influxUtil::addToBatch, Main::processError, 2048);
 
       influxUtil.writeBatch(influxDB);
+
+      System.out.println("Size of cache: " + ocClient.getCache().size());
+      System.out.println("Size of filtered list: " + influxUtil.getFilteredList().size());
       System.out.println("Size of the queue: " + viewed.size());
 
-      Flowable.just(viewed).flatMapIterable(seg -> seg).parallel()
+      /*viewed.forEach(tes -> {
+        if (ocClient.getCache().getIfPresent(tes) == null)
+          System.out.println("Cache doesnt contain this: " + tes);
+      });*/
+
+      // Make sure, that the queue with unique viewed episodes does not contain duplicates.
+      ArrayList<String> episodes = new ArrayList<>();
+      viewed.forEach(tes -> {
+        if (!episodes.contains(tes))
+          episodes.add(tes);
+        else System.out.println("Dupe: " + tes);
+      });
+
+      System.out.println("Size queue w/o dupes: " + episodes.size());
+
+      Flowable.just(episodes).flatMapIterable(seg -> seg)
+              .parallel()
               .runOn(Schedulers.io())
               .flatMap(episode -> MatomoUtils.makeSegmentsImpression(LOGGER, matClient, episode,
-                      configFile.getMatomoConfig().getSiteId(),
-                      configFile.getMatomoConfig().getToken(),
-                      dateNow.minusDays(j).toString(),
-                      queryDate))
+                      configFile.getMatomoConfig().getSiteId(), configFile.getMatomoConfig().getToken(),
+                      queryDate, influxTime))
               .sequential()
               .flatMap(seg -> InfluxDBUtils.checkSegments(seg, influxDB))
               .blockingSubscribe(influxUtil::addToBatch, Main::processError, 2048);
-              /*.blockingSubscribe(p -> InfluxDBUtils.writePointToInflux(configFile.getInfluxDBConfig(), influxDB, p),
-                      Main::processError,
-                      2048);*/
+
       influxUtil.writeBatch(influxDB);
 
       viewed.clear();
-
-      System.out.println(influxUtil.getFilteredList().size());
     }
     System.out.println("Saved Opencast requests: " + count.size());
   }
