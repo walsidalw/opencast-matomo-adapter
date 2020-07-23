@@ -36,6 +36,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.LoggerFactory;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -97,62 +98,74 @@ public final class InfluxDBUtils {
     this.batch.point(p);
   }
 
-  private static List<SegmentsPoint> getPointFromDB(final InfluxDB influxDB, final String db, final String episodeId) {
-    final QueryResult queryResult = influxDB.query(new Query(
-            "SELECT * FROM opencast1.infinite.segments_daily WHERE episodeId='" + episodeId + "'", db));
+  /**
+   * Checks, if an entry of segments for an episode already exists in InfluxDB. If it does,
+   * the entry is updated/overwritten, otherwise, an InfluxDB point is created from Segments
+   * object.
+   *
+   * @param seg Segments objects generated from Matomo request
+   * @param influxDB InfluxDB instance
+   * @param config InfluxDB configuration
+   * @return Point from Segments, if no entry in InfluxDB exists
+   */
+  public static Flowable<Point> checkSegments(final Segments seg, final InfluxDB influxDB,
+          final InfluxDBConfig config) {
 
-    final InfluxDBResultMapper resultMapper = new InfluxDBResultMapper();
-    final List<SegmentsPoint> segmentsPointList = resultMapper.toPOJO(queryResult, SegmentsPoint.class);
-
-    return segmentsPointList.isEmpty() ? null : segmentsPointList;
-  }
-
-  public static Flowable<Point> checkSegments(final Segments seg, final InfluxDB influxDB) throws JSONException {
     final String episodeId = seg.getEpisodeId();
-    // check if record in db is present
-    // If not: return Flowable.just(Segments::toPoint)
-    // combine pojo with segment
-    // save pojo, return Flowable.empty
 
-    /*final QueryResult queryResult = influxDB.query(new Query(
-            "SELECT * FROM opencast1.infinite.segments_daily WHERE episodeId='" + episodeId + "'",
-            "opencast1"));*/
-
+    // Map the result of the InfluxDB query to a list
     final InfluxDBMapper mapper = new InfluxDBMapper(influxDB);
     final List<SegmentsPoint> segmentsPointList = mapper.query(new Query(
-            "SELECT * FROM opencast1.infinite.segments_daily WHERE episodeId='" + episodeId + "'",
-            "opencast1"), SegmentsPoint.class);
-    // final List<SegmentsPoint> segmentsPointList = resultMapper.toPOJO(queryResult, SegmentsPoint.class);
+            "SELECT * FROM segments_daily WHERE episodeId='" + episodeId + "'",
+            config.getDb()), SegmentsPoint.class);
 
+    // If an entry of segments for this episode exists
     if (!segmentsPointList.isEmpty()) {
 
-      // Extract JSONArray from POJO list and from Segments
-      // Combine the two JSONArrays
-      // Set new JSONArray segments in POJO (toString!)
+      try {
 
-      JSONArray arrayPOJO = new JSONArray(segmentsPointList.get(0).getSegments());
-      JSONArray arraySeg = new JSONArray(seg.getSegments());
+        // Convert segment strings to JSONArray
+        final JSONArray arrayPOJO = new JSONArray(segmentsPointList.get(0).getSegments());
+        final JSONArray arraySeg = new JSONArray(seg.getSegments());
 
-      for (int i = 0; i < arrayPOJO.length(); i++) {
+        // Traverse the JSONArrays and update each value
+        for (int i = 0; i < arrayPOJO.length(); i++) {
 
-        JSONObject itemPOJO = (JSONObject)arrayPOJO.get(i);
-        JSONObject itemSeg = (JSONObject)arraySeg.get(i);
+          // Create JSONObject entities from the array, which can be updated dynamically
+          final JSONObject itemPOJO = (JSONObject) arrayPOJO.get(i);
+          final JSONObject itemSeg = (JSONObject) arraySeg.get(i);
+          // Double formatter: round to two decimal places
+          final DecimalFormat df = new DecimalFormat("#.##");
 
-        int plays = Integer.parseInt(itemPOJO.getString("nb_plays")) +
-                Integer.parseInt(itemSeg.getString("nb_plays"));
+          // Update values: old value from InfluxDB + new value from Matomo
+          final int plays = Integer.parseInt(itemPOJO.getString("nb_plays")) +
+                  Integer.parseInt(itemSeg.getString("nb_plays"));
 
-        double rate = Double.parseDouble(itemPOJO.getString("play_rate")) +
-                Double.parseDouble(itemSeg.getString("play_rate"));
+          final int sum = Integer.parseInt(itemPOJO.getString("sum_plays")) +
+                  Integer.parseInt(itemSeg.getString("sum_plays"));
 
-        itemPOJO.put("nb_plays", String.valueOf(plays));
-        itemPOJO.put("play_rate", String.valueOf(rate));
+          final double rate = (double) plays / (double) sum;
+
+          // Update JSONObjects with new values
+          itemPOJO.put("nb_plays", String.valueOf(plays));
+          itemPOJO.put("sum_plays", String.valueOf(plays));
+          itemPOJO.put("play_rate", df.format(rate));
+        }
+
+        // Set updated JSONArray into POJO
+        segmentsPointList.get(0).setSegments(arrayPOJO.toString());
+        // Push updated POJO to InfluxDB. InfluxDB does not support updates natively.
+        // Instead, points with the same tags and timestamp are overwritten
+        mapper.save(segmentsPointList.get(0));
+
+        // Since an update was performed, the item can be evicted from stream
+        return Flowable.empty();
+
+      } catch (final JSONException e) {
+        throw new ParsingJsonSyntaxException(seg.getSegments());
       }
-
-      segmentsPointList.get(0).setSegments(arrayPOJO.toString());
-
-      mapper.save(segmentsPointList.get(0));
-      return Flowable.empty();
     } else {
+      // If no point in InfluxDB exists yet, return new point from Segments
       return Flowable.just(seg.toPoint());
     }
   }
@@ -193,6 +206,7 @@ public final class InfluxDBUtils {
       influxDB = InfluxDBFactory.connect(config.getHost(), config.getUser(), config.getPassword());
 
       influxDB.setDatabase(config.getDb());
+      influxDB.setRetentionPolicy(config.getRetentionPolicy());
       influxDB.enableBatch();
       if (config.getLogLevel().equals("debug")) {
         influxDB.setLogLevel(InfluxDB.LogLevel.FULL);
@@ -210,26 +224,5 @@ public final class InfluxDBUtils {
       }
       throw e;
     }
-  }
-
-  /**
-   * Write the given point to InfluxDB
-   * @param config Configuration (for retention policies etc.)
-   * @param influxDB The InfluxDB connection
-   * @param p The point to write
-   */
-  public static void writePointToInflux(final InfluxDBConfig config, final InfluxDB influxDB, final Point p) {
-    try {
-      final Pong pong = influxDB.ping();
-      if (!pong.isGood()) {
-        LOGGER.error("INFLUXPINGERROR, not good");
-      }
-    } catch (final InfluxDBIOException e) {
-      LOGGER.error("INFLUXPINGERROR, {}", e.getMessage());
-    }
-    if (config.getRetentionPolicy() != null)
-      influxDB.write(config.getDb(), config.getRetentionPolicy(), p);
-    else
-      influxDB.write(p);
   }
 }

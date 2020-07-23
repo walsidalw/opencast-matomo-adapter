@@ -196,7 +196,7 @@ public final class Main {
                       configFile.getMatomoConfig().getSiteId(), configFile.getMatomoConfig().getToken(),
                       queryDate, influxTime))
               .sequential()
-              .flatMap(seg -> InfluxDBUtils.checkSegments(seg, influxDB))
+              .flatMap(seg -> InfluxDBUtils.checkSegments(seg, influxDB, configFile.getInfluxDBConfig()))
               .blockingSubscribe(influxUtil::addToBatch, Main::processError, 2048);
 
       influxUtil.writeBatch(influxDB);

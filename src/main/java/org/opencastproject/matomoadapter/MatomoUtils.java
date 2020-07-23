@@ -110,8 +110,8 @@ public final class MatomoUtils {
     logger.info("Retrieving segments");
     return client
             .getSegmentsRequest(idSite, token, episodeID, date)
-            .concatMap(body -> MatomoUtils.checkResponseCode(logger, body));
-            //.filter(x -> x.length() > 2);
+            .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
+            .filter(x -> x.length() > 2);
   }
 
   public static Flowable<Segments> makeSegmentsImpression(

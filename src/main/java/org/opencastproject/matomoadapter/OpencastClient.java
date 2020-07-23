@@ -75,8 +75,7 @@ public final class OpencastClient {
             CacheBuilder.newBuilder()
                     .expireAfterAccess(opencastConfig.getCacheDuration())
                     .maximumSize(opencastConfig.getCacheSize())
-                    .build() :
-            null;
+                    .build() : null;
   }
 
   private OpencastExternalAPI getClient() {
