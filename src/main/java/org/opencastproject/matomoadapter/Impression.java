@@ -34,6 +34,7 @@ public final class Impression {
   private final String episodeId;
   private final String organizationId;
   private final String seriesId;
+  private final String startDate;
   private final int plays;
   private final int visitors;
   private final int finishes;
@@ -43,6 +44,7 @@ public final class Impression {
           final String episodeId,
           final String organizationId,
           final String seriesId,
+          final String startDate,
           final int plays,
           final int visitors,
           final int finishes,
@@ -50,6 +52,7 @@ public final class Impression {
     this.episodeId = episodeId;
     this.organizationId = organizationId;
     this.seriesId = seriesId;
+    this.startDate = startDate;
     this.plays = plays;
     this.visitors = visitors;
     this.finishes = finishes;
@@ -96,6 +99,8 @@ public final class Impression {
   public String getOrganizationId() { return this.organizationId; }
 
   public String getSeriesId() { return this.seriesId; }
+
+  public String getStartDate() { return this.startDate; }
 
   public int getPlays() { return this.plays; }
 

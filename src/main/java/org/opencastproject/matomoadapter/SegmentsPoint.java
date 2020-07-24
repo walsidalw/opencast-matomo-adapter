@@ -25,9 +25,5 @@ public class SegmentsPoint {
 
   public String getSegments() { return this.segments; }
 
-  public void setEpisodeId(final String episodeId) { this.episodeId = episodeId; }
-
   public void setSegments(final String segments) { this.segments = segments; }
-
-  //public void setTime(final long time) { this.time = time; }
 }

@@ -32,7 +32,6 @@ import com.google.common.cache.CacheBuilder;
 
 import devcsrj.okhttp3.logging.HttpLoggingInterceptor;
 import io.reactivex.Flowable;
-import io.reactivex.schedulers.Schedulers;
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.ResponseBody;
@@ -49,7 +48,7 @@ public final class OpencastClient {
 
   private final OpencastConfig opencastConfig;
   private final OkHttpClient client;
-  private final Cache<String, String> cache;
+  private final Cache<String, OpencastDataPair> cache;
 
   /**
    * Create the client
@@ -70,8 +69,7 @@ public final class OpencastClient {
             b.build();
 
     // Initialize cache, if needed
-    this.cache = opencastConfig != null && !opencastConfig.getCacheDuration().isZero()
-            && opencastConfig.getCacheSize() != 0 ?
+    this.cache = !opencastConfig.getCacheDuration().isZero() && opencastConfig.getCacheSize() != 0 ?
             CacheBuilder.newBuilder()
                     .expireAfterAccess(opencastConfig.getCacheDuration())
                     .maximumSize(opencastConfig.getCacheSize())
@@ -106,7 +104,7 @@ public final class OpencastClient {
     return "Basic " + userAndPassBase64;
   }
 
-  public Cache<String, String> getCache() {
+  public Cache<String, OpencastDataPair> getCache() {
     return this.cache;
   }
 }

@@ -39,8 +39,10 @@ import org.slf4j.LoggerFactory;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import io.reactivex.Flowable;
+import io.reactivex.annotations.NonNull;
 
 /**
  * Contains utility functions related to InfluxDB
@@ -49,14 +51,11 @@ public final class InfluxDBUtils {
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
   private BatchPoints batch;
-  private final ArrayList<Impression> filterList;
-
   // TEST TEST TEST TEST
   private int count = 0;
 
   public InfluxDBUtils(final InfluxDBConfig config) {
     this.batch = BatchPoints.database(config.getDb()).retentionPolicy(config.getRetentionPolicy()).build();
-    this.filterList = new ArrayList<>();
   }
 
   /**
@@ -64,38 +63,33 @@ public final class InfluxDBUtils {
    *
    * @param newImpression Newly emitted Impression
    */
-  public void addToFilter(final Impression newImpression) {
+  @NonNull
+  public ArrayList<Impression> addToFilter(final ArrayList<Impression> oldList, final Impression newImpression) {
 
     final String episodeId = newImpression.getEpisodeId();
 
     // If the list already contains an Impression with the same episodeID as the new Impression, merge
     // both into one Impression.
-    if (this.filterList.contains(newImpression)) {
+    if (oldList.contains(newImpression)) {
 
-      final Impression old = this.filterList.get(this.filterList.indexOf(newImpression));
+      final Impression old = oldList.get(oldList.indexOf(newImpression));
       // Merge stats of old and new Impression
       final int plays = old.getPlays() + newImpression.getPlays();
       final int visitors = old.getVisitors() + newImpression.getVisitors();
       final int finishes = old.getFinishes() + newImpression.getFinishes();
 
       final Impression combined = new Impression(episodeId, old.getOrganizationId(), old.getSeriesId(),
-                                                plays, visitors, finishes, old.getDate());
+              old.getStartDate(), plays,
+              visitors, finishes, old.getDate());
 
-      this.filterList.remove(old);
-      this.filterList.add(combined);
+      oldList.remove(old);
+      oldList.add(combined);
 
+    } else {
+      oldList.add(newImpression);
     }
-    else {
-      this.filterList.add(newImpression);
-    }
-  }
 
-  public ArrayList<Impression> getFilteredList() { return this.filterList; }
-
-  public void addToBatch(final Point p) {
-    // TEST TEST TEST TEST TEST
-    count++;
-    this.batch.point(p);
+    return oldList;
   }
 
   /**
@@ -109,7 +103,7 @@ public final class InfluxDBUtils {
    * @return Point from Segments, if no entry in InfluxDB exists
    */
   public static Flowable<Point> checkSegments(final Segments seg, final InfluxDB influxDB,
-          final InfluxDBConfig config) {
+          final InfluxDBConfig config, final ConcurrentLinkedQueue<String> counter) {
 
     final String episodeId = seg.getEpisodeId();
     final String db = config.getDb();
@@ -129,6 +123,12 @@ public final class InfluxDBUtils {
         // Convert segment strings to JSONArray
         final JSONArray arrayPOJO = new JSONArray(segmentsPointList.get(0).getSegments());
         final JSONArray arraySeg = new JSONArray(seg.getSegments());
+
+        if (arrayPOJO.length() != arraySeg.length()) {
+          counter.add("sh");
+          return Flowable.empty();
+        }
+
 
         // Traverse the JSONArrays and update each value
         for (int i = 0; i < arrayPOJO.length(); i++) {
@@ -164,12 +164,21 @@ public final class InfluxDBUtils {
         return Flowable.empty();
 
       } catch (final JSONException e) {
-        throw new ParsingJsonSyntaxException(seg.getSegments());
+        final String error = String.format("Present segments: %s%n Query segments: %s%n Episodes: ",
+                seg.getSegments(),
+                segmentsPointList.get(0).getSegments());
+        throw new ParsingJsonSyntaxException(error);
       }
     } else {
       // If no point in InfluxDB exists yet, return new point from Segments
       return Flowable.just(seg.toPoint());
     }
+  }
+
+  public void addToBatch(final Point p) {
+    // TEST TEST TEST TEST TEST
+    count++;
+    this.batch.point(p);
   }
 
   /**

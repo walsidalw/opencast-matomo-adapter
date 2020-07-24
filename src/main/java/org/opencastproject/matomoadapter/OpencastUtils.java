@@ -56,13 +56,17 @@ public final class OpencastUtils {
    * @return Either a series ID or <code>Optional.empty()</code>
    */
   @SuppressWarnings("unchecked")
-  private static Optional<String> seriesForEventJson(final String eventJson) {
+  private static Optional<OpencastDataPair> dataPairForEventJson(final String eventJson) {
+    /*
+    TODO: Use only one JSON handler GSON/JSONObject
+     */
     try {
       final Map<String, Object> m = new Gson().fromJson(eventJson, Map.class);
       if (m != null) {
         final Object isPartOf = m.get("is_part_of");
-        if (isPartOf instanceof String) {
-          return Optional.of((String) isPartOf);
+        final Object start = m.get("start");
+        if ((isPartOf instanceof String) && (start instanceof String)) {
+          return Optional.of(new OpencastDataPair((String) isPartOf, (String) start));
         }
       }
       return Optional.empty();
@@ -80,17 +84,17 @@ public final class OpencastUtils {
    * @param episodeId         The episode ID
    * @return Either a singleton <code>Flowable</code> with the resulting series ID, or an empty <code>Flowable</code>
    */
-  private static Flowable<String> seriesForEvent(
+  private static Flowable<OpencastDataPair> dataPairForEvent(
           final Logger logger,
           final OpencastClient client,
           final String organization,
           final String episodeId,
           ArrayList<String> count) {
 
-    final Cache<String, String> cache = client.getCache();
+    final Cache<String, OpencastDataPair> cache = client.getCache();
 
     // Check if cache exists and then check, if the eventId is already stored
-    final String cachedId = cache != null ? cache.getIfPresent(episodeId) : null;
+    final OpencastDataPair cachedId = cache != null ? cache.getIfPresent(episodeId) : null;
 
     // If the eventId already has an entry with a corresponding seriesId, return seriesId
     if (cachedId != null) {
@@ -98,18 +102,18 @@ public final class OpencastUtils {
       return Flowable.just(cachedId);
     }
 
-    logger.info("Retrieving series for organization \"{}\", episode \"{}\"...", organization, episodeId);
+    logger.info("Retrieving series and start date for organization \"{}\", episode \"{}\"...", organization, episodeId);
 
     // Request event information from Opencast. If available, store the seriesId in the cache
     return client
             .getEventRequest(organization, episodeId)
             .concatMap(body -> OpencastUtils.checkResponseCode(logger, body, organization, episodeId))
-            .map(OpencastUtils::seriesForEventJson)
-            .concatMap(series -> {
-              if (series.isPresent()) {
+            .map(OpencastUtils::dataPairForEventJson)
+            .concatMap(dataPair -> {
+              if (dataPair.isPresent()) {
                 if (cache != null)
-                  cache.put(episodeId, series.get());
-                return Flowable.just(series.get());
+                  cache.put(episodeId, dataPair.get());
+                return Flowable.just(dataPair.get());
               }
               return Flowable.empty();
             });
@@ -130,20 +134,15 @@ public final class OpencastUtils {
     final boolean correctResponse = x.code() / 200 == 1;
     if (!correctResponse) {
       if (x.code() == 404) {
-        logger.error("OCHTTPERROR, episode {}, organization {}: code, {}", x.code(), episodeId, organization);
+        logger.info("OCHTTPWARNING, episode {}, organization {}: code, {}", x.code(), episodeId, organization);
         return Flowable.empty();
       }
+      logger.error("OCHTTPERROR, episode {}, organization {}: code, {}", x.code(), episodeId, organization);
       return Flowable.error(new InvalidOpencastResponse(x.code()));
     } else {
       logger.debug("OCHTTPSUCCESS, episode {}, organization {}", episodeId, organization);
       return Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string());
     }
-
-    /*return correctResponse ?
-            Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string()) :
-            // TEST TEST TEST TEST TEST
-            Flowable.error(new InvalidOpencastResponse(x.code()));
-            //Flowable.empty();*/
   }
 
   /**
@@ -179,9 +178,9 @@ public final class OpencastUtils {
       final int finishes = json.getInt("nb_finishes");
 
       // Create new Impression Flowable with series data from Opencast
-      return seriesForEvent(logger, client, "org", episodeId, count)
-              .flatMap(series -> Flowable.just(new Impression(episodeId, "mh_default_org",
-                      series, plays, visits, finishes, time)));
+      return dataPairForEvent(logger, client, "org", episodeId, count)
+              .flatMap(dataPair -> Flowable.just(new Impression(episodeId, "mh_default_org",
+                      dataPair.getSeriesId(), dataPair.getStartDate(), plays, visits, finishes, time)));
 
     } catch (final JSONException e) {
       throw new ParsingJsonSyntaxException(json.toString());
@@ -189,8 +188,8 @@ public final class OpencastUtils {
   }
 
   /**
-   * Parses the video URL to find the eventID. Currently the most common URL-types, coming from the
-   * Theodul and Paella player are supported. Live Streams do not contain an eventID.
+   * Parses the video URL to find the episodeId. Currently the most common URL-types, coming from the
+   * Theodul and Paella player are supported. Live Streams do not contain an episodeId.
    *
    * @param label Sub-URL of the video
    * @return The eventID parsed from the URL

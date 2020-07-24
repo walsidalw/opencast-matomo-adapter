@@ -143,12 +143,15 @@ public final class Main {
 
     //final ConcurrentLinkedQueue<String> viewed = new ConcurrentLinkedQueue<>();
     ArrayList<String> count = new ArrayList<>();
+    ConcurrentLinkedQueue<String> counter = new ConcurrentLinkedQueue<>();
 
     for (int i = days; i > 1; i--) {
 
       final OffsetDateTime influxTime = OffsetDateTime.now().minusDays(i);
       final String queryDate = dateNow.minusDays(i).toString();
       final InfluxDBUtils influxUtil = new InfluxDBUtils(configFile.getInfluxDBConfig());
+
+      final ArrayList<Impression> acc = new ArrayList<>();
 
       // First, get all statistical data for all viewed episodes on given date
       MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
@@ -157,13 +160,8 @@ public final class Main {
               .runOn(Schedulers.io())
               .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, influxTime, count))
               .sequential()
-              // There can be multiple entries for the same episode. Filter all entries and combine entries
-              // for the same episode.
-              .blockingSubscribe(influxUtil::addToFilter, Main::processError, 2048);
-
-      final ArrayList<Impression> filteredList = influxUtil.getFilteredList();
-
-      Flowable.just(filteredList).flatMapIterable(impressions -> impressions)
+              .reduce(acc, influxUtil::addToFilter)
+              .flattenAsFlowable(impressions -> impressions)
               .parallel()
               .runOn(Schedulers.io())
               .map(Impression::toPoint)
@@ -172,23 +170,24 @@ public final class Main {
 
       influxUtil.writeBatch(influxDB);
 
-      Flowable.just(filteredList).flatMapIterable(impressions -> impressions)
+      Flowable.just(acc).flatMapIterable(impressions -> impressions)
               .parallel()
               .runOn(Schedulers.io())
-              .map(Impression::getEpisodeId)
-              .flatMap(episode -> MatomoUtils.makeSegmentsImpression(LOGGER, matClient, episode,
+              //.map(Impression::getEpisodeId)
+              .flatMap(impression -> MatomoUtils.makeSegmentsImpression(LOGGER, matClient, impression,
                       configFile.getMatomoConfig().getSiteId(), configFile.getMatomoConfig().getToken(),
                       queryDate, influxTime))
               .sequential()
-              .flatMap(seg -> InfluxDBUtils.checkSegments(seg, influxDB, configFile.getInfluxDBConfig()))
+              .flatMap(seg -> InfluxDBUtils.checkSegments(seg, influxDB, configFile.getInfluxDBConfig(), counter))
               .blockingSubscribe(influxUtil::addToBatch, Main::processError, 2048);
 
       System.out.println("Size of cache: " + ocClient.getCache().size());
-      System.out.println("Size of filtered list: " + filteredList.size());
+      System.out.println("Size of filtered list: " + acc.size());
 
       influxUtil.writeBatch(influxDB);
     }
     System.out.println("Saved Opencast requests: " + count.size());
+    System.out.println("Different segments: " + counter.size());
   }
 
   /**
