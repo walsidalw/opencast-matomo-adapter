@@ -85,7 +85,6 @@ public final class OpencastUtils {
           final OpencastClient client,
           final String organization,
           final String episodeId,
-          final ConcurrentLinkedQueue<String> viewed,
           ArrayList<String> count) {
 
     final Cache<String, String> cache = client.getCache();
@@ -108,23 +107,12 @@ public final class OpencastUtils {
             .map(OpencastUtils::seriesForEventJson)
             .concatMap(series -> {
               if (series.isPresent()) {
-
                 if (cache != null)
                   cache.put(episodeId, series.get());
-                viewed.add(episodeId);
-                // TEST TEST TEST TEST
-                System.out.println(cache.size());
-
                 return Flowable.just(series.get());
               }
               return Flowable.empty();
-            });/*.doOnNext(seriesId -> {
-              if (cache != null)
-                cache.put(episodeId, seriesId);
-              viewed.add(episodeId);
-              // TEST TEST TEST TEST
-              System.out.println(cache.size());
-            });*/
+            });
   }
 
   /**
@@ -174,7 +162,6 @@ public final class OpencastUtils {
           final OpencastClient client,
           final JSONObject json,
           final OffsetDateTime time,
-          final ConcurrentLinkedQueue<String> viewed,
           ArrayList<String> count) {
 
     try {
@@ -192,7 +179,7 @@ public final class OpencastUtils {
       final int finishes = json.getInt("nb_finishes");
 
       // Create new Impression Flowable with series data from Opencast
-      return seriesForEvent(logger, client, "org", episodeId, viewed, count)
+      return seriesForEvent(logger, client, "org", episodeId, count)
               .flatMap(series -> Flowable.just(new Impression(episodeId, "mh_default_org",
                       series, plays, visits, finishes, time)));
 

@@ -112,12 +112,14 @@ public final class InfluxDBUtils {
           final InfluxDBConfig config) {
 
     final String episodeId = seg.getEpisodeId();
+    final String db = config.getDb();
+    final String rp = config.getRetentionPolicy();
+
+    final String queryString = String.format("SELECT * FROM %s.%s.segments_daily WHERE episodeId='%s'", db, rp, episodeId);
 
     // Map the result of the InfluxDB query to a list
     final InfluxDBMapper mapper = new InfluxDBMapper(influxDB);
-    final List<SegmentsPoint> segmentsPointList = mapper.query(new Query(
-            "SELECT * FROM segments_daily WHERE episodeId='" + episodeId + "'",
-            config.getDb()), SegmentsPoint.class);
+    final List<SegmentsPoint> segmentsPointList = mapper.query(new Query(queryString, db), SegmentsPoint.class);
 
     // If an entry of segments for this episode exists
     if (!segmentsPointList.isEmpty()) {
@@ -148,7 +150,7 @@ public final class InfluxDBUtils {
 
           // Update JSONObjects with new values
           itemPOJO.put("nb_plays", String.valueOf(plays));
-          itemPOJO.put("sum_plays", String.valueOf(plays));
+          itemPOJO.put("sum_plays", String.valueOf(sum));
           itemPOJO.put("play_rate", df.format(rate));
         }
 
@@ -188,9 +190,11 @@ public final class InfluxDBUtils {
     influxDB.write(this.batch);
     // TEST TEST TEST TEST TEST
     System.out.println("Count of points in batch: " + this.count);
+    this.count = 0;
 
     final String rp = this.batch.getRetentionPolicy();
     final String db = this.batch.getDatabase();
+    //this.batch = null;
     this.batch = BatchPoints.database(db).retentionPolicy(rp).build();
   }
 
