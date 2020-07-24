@@ -66,7 +66,8 @@ public final class OpencastUtils {
         final Object isPartOf = m.get("is_part_of");
         final Object start = m.get("start");
         if ((isPartOf instanceof String) && (start instanceof String)) {
-          return Optional.of(new OpencastDataPair((String) isPartOf, (String) start));
+          final String startDate = ((String) start).substring(1, 10);
+          return Optional.of(new OpencastDataPair((String) isPartOf, startDate));
         }
       }
       return Optional.empty();

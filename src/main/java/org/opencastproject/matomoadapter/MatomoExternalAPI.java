@@ -40,11 +40,11 @@ public interface MatomoExternalAPI {
           @Query("token_auth") String token,
           @Query("date") String date);
 
-  @GET("/?module=API&method=MediaAnalytics.getVideoTitles&period=day&format=json&idSubtable=1"
+  @GET("/?module=API&method=MediaAnalytics.getVideoTitles&period=range&format=json&idSubtable=1"
           + "&filter_limit=-1&secondaryDimension=media_segments")
   Flowable<Response<ResponseBody>> getSegments(
           @Query("idSite") String idSite,
           @Query("token_auth") String token,
           @Query("segment") String source,
-          @Query("date") String date);
+          @Query("date") String period);
 }

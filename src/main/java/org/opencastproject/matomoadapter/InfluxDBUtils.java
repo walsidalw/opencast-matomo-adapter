@@ -28,9 +28,7 @@ import org.influxdb.dto.BatchPoints;
 import org.influxdb.dto.Point;
 import org.influxdb.dto.Pong;
 import org.influxdb.dto.Query;
-import org.influxdb.dto.QueryResult;
 import org.influxdb.impl.InfluxDBMapper;
-import org.influxdb.impl.InfluxDBResultMapper;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -102,7 +100,7 @@ public final class InfluxDBUtils {
    * @param config InfluxDB configuration
    * @return Point from Segments, if no entry in InfluxDB exists
    */
-  public static Flowable<Point> checkSegments(final Segments seg, final InfluxDB influxDB,
+  public static Flowable<Point> checkSegments(final SegmentsImpression seg, final InfluxDB influxDB,
           final InfluxDBConfig config, final ConcurrentLinkedQueue<String> counter) {
 
     final String episodeId = seg.getEpisodeId();

@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 import io.reactivex.Flowable;
 import okhttp3.ResponseBody;
@@ -105,26 +104,33 @@ public final class MatomoUtils {
           final MatomoClient client,
           final String idSite,
           final String token,
-          final String episodeID,
-          final String date) {
+          final Impression impression,
+          final String endDate) {
+
+    final String episodeId = impression.getEpisodeId();
+    final String startDate = impression.getStartDate();
+
+    final String period = String.format("%s,%s", startDate, endDate);
+
     logger.info("Retrieving segments");
     return client
-            .getSegmentsRequest(idSite, token, episodeID, date)
+            .getSegmentsRequest(idSite, token, episodeId, period)
             .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
             .filter(x -> x.length() > 2);
   }
 
-  public static Flowable<Segments> makeSegmentsImpression(
+  public static Flowable<SegmentsImpression> makeSegmentsImpression(
           final Logger logger,
           final MatomoClient client,
-          final String episodeID,
+          final Impression impression,
           final String idSite,
           final String token,
           final String date,
           final OffsetDateTime time) {
 
-    return getSegments(logger, client, idSite, token, episodeID, date)
-            .flatMap(json -> Flowable.just(new Segments(episodeID, "mh_default", json, time)));
+    return getSegments(logger, client, idSite, token, impression, date)
+            .flatMap(json -> Flowable.just(new SegmentsImpression(
+                    impression.getEpisodeId(), "mh_default", json, time)));
   }
 
 

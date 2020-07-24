@@ -106,8 +106,8 @@ public final class MatomoClient {
    * @return Raw response to the request (JSONArray)
    */
   public Flowable<Response<ResponseBody>> getSegmentsRequest(final String idSite, final String token,
-                                                             final String episodeID, final String date) {
+                                                             final String episodeID, final String period) {
     LOGGER.debug("MATOMOREQUESTSTART, method: getVideoSegments, episodeId: {}", episodeID);
-    return getClient().getSegments(idSite, token, "media_resource%3D@" + episodeID, date);
+    return getClient().getSegments(idSite, token, "media_resource%3D@" + episodeID, period);
   }
 }
