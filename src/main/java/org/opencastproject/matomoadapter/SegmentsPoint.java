@@ -6,6 +6,10 @@ import org.influxdb.annotation.Measurement;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Model class (POJO) for InfluxDB mapper
+ */
+@SuppressWarnings("InstanceVariableMayNotBeInitialized")
 @Measurement(name = "segments_daily", timeUnit = TimeUnit.SECONDS)
 public class SegmentsPoint {
 
@@ -21,9 +25,5 @@ public class SegmentsPoint {
   @Column(name = "segments")
   private String segments;
 
-  public String getEpisodeId() { return this.episodeId; }
-
-  public String getSegments() { return this.segments; }
-
-  public void setSegments(final String segments) { this.segments = segments; }
+  public Instant getTime() { return this.time; }
 }

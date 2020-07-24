@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import io.reactivex.Flowable;
+import io.reactivex.annotations.NonNull;
 import io.reactivex.internal.operators.maybe.MaybeMergeArray;
 import okhttp3.ResponseBody;
 import retrofit2.Response;
@@ -66,7 +68,7 @@ public final class OpencastUtils {
         final Object isPartOf = m.get("is_part_of");
         final Object start = m.get("start");
         if ((isPartOf instanceof String) && (start instanceof String)) {
-          final String startDate = ((String) start).substring(1, 10);
+          final String startDate = ((String) start).substring(0, 10);
           return Optional.of(new OpencastDataPair((String) isPartOf, startDate));
         }
       }
@@ -90,7 +92,8 @@ public final class OpencastUtils {
           final OpencastClient client,
           final String organization,
           final String episodeId,
-          ArrayList<String> count) {
+          // TEST TEST TEST TEST
+          final Collection<String> count) {
 
     final Cache<String, OpencastDataPair> cache = client.getCache();
 
@@ -99,6 +102,7 @@ public final class OpencastUtils {
 
     // If the eventId already has an entry with a corresponding seriesId, return seriesId
     if (cachedId != null) {
+      // TEST TEST TEST TEST
       count.add("val");
       return Flowable.just(cachedId);
     }
@@ -118,6 +122,28 @@ public final class OpencastUtils {
               }
               return Flowable.empty();
             });
+  }
+
+  /**
+   * Parses the video URL to find the episodeId. Currently the most common URL-types, coming from the
+   * Theodul and Paella player are supported. Live Streams do not contain an episodeId.
+   *
+   * @param label Sub-URL of the video
+   * @return The eventID parsed from the URL
+   */
+  private static String getEventJson(final String label) {
+
+    if (!label.contains("engage") && !label.contains("static"))
+      return null;
+
+    final String sub = label.substring(1, 7);
+
+    if (sub.equals("engage")) {
+      return label.substring(label.lastIndexOf("?id=") + 4, label.lastIndexOf("?id=") + 40);
+    } else if (sub.equals("static")) {
+      return label.substring(label.lastIndexOf("yer/") + 4, label.lastIndexOf("yer/") + 40);
+    }
+    return null;
   }
 
   /**
@@ -162,7 +188,8 @@ public final class OpencastUtils {
           final OpencastClient client,
           final JSONObject json,
           final OffsetDateTime time,
-          ArrayList<String> count) {
+          // TEST TEST TEST TEST
+          final Collection<String> count) {
 
     try {
       // Extract data from JSON
@@ -189,24 +216,37 @@ public final class OpencastUtils {
   }
 
   /**
-   * Parses the video URL to find the episodeId. Currently the most common URL-types, coming from the
-   * Theodul and Paella player are supported. Live Streams do not contain an episodeId.
+   * Checks all emitted Impressions for duplicates. Duplicates are merged into one Impression.
    *
-   * @param label Sub-URL of the video
-   * @return The eventID parsed from the URL
+   * @param newImpression Newly emitted Impression
    */
-  private static String getEventJson(final String label) {
+  @NonNull
+  public static ArrayList<Impression> filterImpressions(final ArrayList<Impression> oldList,
+                                                        final Impression newImpression) {
 
-    if (!label.contains("engage") && !label.contains("static"))
-      return null;
+    final String episodeId = newImpression.getEpisodeId();
 
-    final String sub = label.substring(1, 7);
+    // If the list already contains an Impression with the same episodeID as the new Impression, merge
+    // both into one Impression.
+    if (oldList.contains(newImpression)) {
 
-    if (sub.equals("engage")) {
-      return label.substring(label.lastIndexOf("?id=") + 4, label.lastIndexOf("?id=") + 40);
-    } else if (sub.equals("static")) {
-      return label.substring(label.lastIndexOf("yer/") + 4, label.lastIndexOf("yer/") + 40);
+      final Impression old = oldList.get(oldList.indexOf(newImpression));
+      // Merge stats of old and new Impression
+      final int plays = old.getPlays() + newImpression.getPlays();
+      final int visitors = old.getVisitors() + newImpression.getVisitors();
+      final int finishes = old.getFinishes() + newImpression.getFinishes();
+
+      final Impression combined = new Impression(episodeId, old.getOrganizationId(), old.getSeriesId(),
+              old.getStartDate(), plays,
+              visitors, finishes, old.getDate());
+
+      oldList.remove(old);
+      oldList.add(combined);
+
+    } else {
+      oldList.add(newImpression);
     }
-    return null;
+
+    return oldList;
   }
 }

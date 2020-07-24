@@ -23,7 +23,6 @@ package org.opencastproject.matomoadapter;
 
 import org.slf4j.LoggerFactory;
 
-import java.sql.Time;
 import java.util.concurrent.TimeUnit;
 
 import devcsrj.okhttp3.logging.HttpLoggingInterceptor;
@@ -55,9 +54,9 @@ public final class MatomoClient {
     final Interceptor interceptor = new HttpLoggingInterceptor();
     final OkHttpClient.Builder b = new OkHttpClient.Builder()
             .addInterceptor(interceptor)
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS);
+            .connectTimeout(500, TimeUnit.SECONDS)
+            .readTimeout(500, TimeUnit.SECONDS)
+            .writeTimeout(500, TimeUnit.SECONDS);
     // Add rate limiter in case network traffic needs to be throttled
     this.client = matomoConfig.getRate() != 0 ?
             b.addInterceptor(new LimitInterceptor(matomoConfig.getRate())).build() :
@@ -102,7 +101,7 @@ public final class MatomoClient {
    * @param idSite Site ID from the config file
    * @param token Auth token for Matomo API from the config file
    * @param episodeID EpisodeID of the video
-   * @param date Date for requested statistics
+   * @param period Span of days between start Date and now
    * @return Raw response to the request (JSONArray)
    */
   public Flowable<Response<ResponseBody>> getSegmentsRequest(final String idSite, final String token,

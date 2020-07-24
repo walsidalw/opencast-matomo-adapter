@@ -23,8 +23,9 @@ package org.opencastproject.matomoadapter;
 
 import org.influxdb.dto.Point;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.util.Objects;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -34,17 +35,30 @@ public final class SegmentsImpression {
   private final String episodeId;
   private final String organizationId;
   private final String segments;
-  private final OffsetDateTime date;
+  private final Instant date;
 
-  public SegmentsImpression(
+  public SegmentsImpression (
           final String episodeId,
           final String organizationId,
           final String segments,
-          final OffsetDateTime date) {
+          final OffsetDateTime date,
+          // TEST TEST TEST
+          final ConcurrentLinkedQueue<String> cou) {
     this.episodeId = episodeId;
     this.organizationId = organizationId;
     this.segments = segments;
-    this.date = date;
+    this.date = date.toInstant();
+
+    // TEST TEST TEST TEST
+    cou.add("te");
+    System.out.println("Size WIP: " + cou.size());
+  }
+
+  public SegmentsImpression (final SegmentsImpression seg, final Instant time) {
+    this.episodeId = seg.getEpisodeId();
+    this.organizationId = seg.getOrganizationId();
+    this.segments = seg.getSegments();
+    this.date = time;
   }
 
   /**
@@ -54,7 +68,7 @@ public final class SegmentsImpression {
   public Point toPoint() {
     return Point
             .measurement("segments_daily")
-            .time(this.date.toInstant().getEpochSecond(), TimeUnit.SECONDS)
+            .time(this.date.getEpochSecond(), TimeUnit.SECONDS)
             .addField("segments", this.segments)
             .tag("organizationId", this.organizationId)
             .tag("episodeId", this.episodeId)
@@ -65,7 +79,7 @@ public final class SegmentsImpression {
     return this.episodeId;
   }
 
-  public String getSegments() {
-    return this.segments;
-  }
+  public String getSegments() { return this.segments; }
+
+  public String getOrganizationId() { return this.organizationId; }
 }

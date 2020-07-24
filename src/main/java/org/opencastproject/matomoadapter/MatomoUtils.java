@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import io.reactivex.Flowable;
 import okhttp3.ResponseBody;
@@ -57,7 +58,6 @@ public final class MatomoUtils {
           list.add(jArray.getJSONObject(i));
         }
       }
-      Main.testT(list.size());
       return list;
     } catch (final JSONException e) {
       throw new ParsingJsonSyntaxException(json);
@@ -67,11 +67,11 @@ public final class MatomoUtils {
   /**
    * Invoke a request to the Matomo MediaAnalytics.getVideoResources API.
    *
-   * @param logger Logger Object from Main
+   * @param logger Logger for info/error logging
    * @param client Matomo client instance
    * @param idSite Site ID from config file
    * @param token Auth token for Matomo API from config file
-   * @param date Date for request
+   * @param date Date of request
    * @return Returns Flowable with JSONObjects containing episode statistics
    */
   public static Flowable<JSONObject> getResources(
@@ -80,7 +80,9 @@ public final class MatomoUtils {
           final String idSite,
           final String token,
           final String date) {
+
     logger.info("Retrieving resources");
+
     return client
             .getResourcesRequest(idSite, token, date)
             .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
@@ -91,12 +93,12 @@ public final class MatomoUtils {
   /**
    * Invoke a request to the Matomo MediaAnalytics.getVideoTitles API and filter out empty responses.
    *
-   * @param logger Logger Object from Main
+   * @param logger Logger for info/error logging
    * @param client Matomo client instance
    * @param idSite Site ID from config file
    * @param token Auth token for Matomo API from config file
-   * @param episodeID Episode for which segment information shall be retrieved
-   * @param date Date for request
+   * @param impression Contains all necessary episode information
+   * @param endDate Date of request
    * @return Returns Flowable with Strings containing segment statistics
    */
   private static Flowable<String> getSegments(
@@ -112,13 +114,27 @@ public final class MatomoUtils {
 
     final String period = String.format("%s,%s", startDate, endDate);
 
-    logger.info("Retrieving segments");
+    logger.info("Retrieving segments for episode {}", episodeId);
+
     return client
             .getSegmentsRequest(idSite, token, episodeId, period)
             .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
+            // Filter out all empty responses
             .filter(x -> x.length() > 2);
   }
 
+  /**
+   * Prompts an API call and converts it to a SegmentsImpression.
+   *
+   * @param logger Logger for info/error logging
+   * @param client Matomo client instance
+   * @param impression Contains all necessary episode information
+   * @param idSite Site ID from config file
+   * @param token Auth token for Matomo API from config file
+   * @param date Date of request
+   * @param time Timestamp for InfluxDB
+   * @return Returns Flowable with Strings containing segment statistics
+   */
   public static Flowable<SegmentsImpression> makeSegmentsImpression(
           final Logger logger,
           final MatomoClient client,
@@ -126,11 +142,13 @@ public final class MatomoUtils {
           final String idSite,
           final String token,
           final String date,
-          final OffsetDateTime time) {
+          final OffsetDateTime time,
+          // TEST TEST TEST TEST
+          final ConcurrentLinkedQueue<String> cou) {
 
     return getSegments(logger, client, idSite, token, impression, date)
             .flatMap(json -> Flowable.just(new SegmentsImpression(
-                    impression.getEpisodeId(), "mh_default", json, time)));
+                    impression.getEpisodeId(), "mh_default", json, time, cou)));
   }
 
 
@@ -141,9 +159,7 @@ public final class MatomoUtils {
    * @param logger Logger for errors
    * @return An empty <code>Flowable</code> if it's an invalid HTTP response, or a singleton <code>Flowable</code> containing the body as a string
    */
-  private static Flowable<String> checkResponseCode(
-          final Logger logger,
-          final Response<? extends ResponseBody> x) {
+  private static Flowable<String> checkResponseCode(final Logger logger, final Response<? extends ResponseBody> x) {
     final boolean correctResponse = x.code() / 200 == 1;
     if (!correctResponse) {
       logger.error("MATHTTPERROR: code: {}", x.code());
