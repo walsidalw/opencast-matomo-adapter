@@ -34,6 +34,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.Period;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -82,7 +83,7 @@ public final class Main {
       final LocalDate dateNow = LocalDate.now();
 
       // Days between today and the last update
-      final int days = Period.between(lastDate, dateNow).getDays();
+      final int days = (int)ChronoUnit.DAYS.between(lastDate, dateNow);
 
       getViewStats(matClient, ocClient, influxDB, configFile, days, dateNow);
 
@@ -169,7 +170,7 @@ public final class Main {
       influxPro.writeBatchReset(influxDB);
 
       // List of unique Impressions tells us, for which episodes we need to fetch segment data
-      Flowable.just(seed).flatMapIterable(impressions -> impressions)
+      /*Flowable.just(seed).flatMapIterable(impressions -> impressions)
               .parallel()
               .runOn(Schedulers.io())
               // Request segment statistics and build SegmentsPoints
@@ -185,10 +186,14 @@ public final class Main {
       System.out.println("Size of cache: " + ocClient.getCache().size());
       System.out.println("Size of filtered list: " + seed.size());
 
-      influxPro.writeBatchReset(influxDB);
+      influxPro.writeBatchReset(influxDB);*/
 
       // Remove all elements from list for it to be reused
       seed.clear();
+
+      // TEST TEST TEST TEST
+      counter.clear();
+      counter2.clear();
     }
 
     // TEST TEST TEST TEST

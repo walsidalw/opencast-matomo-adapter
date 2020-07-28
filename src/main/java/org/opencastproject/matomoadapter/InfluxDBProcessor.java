@@ -67,9 +67,20 @@ public final class InfluxDBProcessor {
   public static Flowable<Point> checkSegments(final SegmentsImpression seg, final InfluxDB influxDB,
           final InfluxDBConfig config, final ConcurrentLinkedQueue<String> cou) {
 
-    final String episodeId = seg.getEpisodeId();
+    String episodeId = seg.getEpisodeId();
     final String db = config.getDb();
     final String rp = config.getRetentionPolicy();
+
+    String ser;
+
+    // TEST TEST TEST TEST
+    if (episodeId.equals("05d933ea-8ec0-4a49-bdd2-d8dfa009b291")) {
+      episodeId = "724525f2-c44c-41e5-8697-e7c3bf9e1012";
+      ser = "9bced1af-3f86-425a-a16b-8db01d9475ff";
+    } else if (episodeId.equals("093700de-986e-4476-bb15-81dd5667a290")) {
+      episodeId = "8a24880e-7fe9-44c6-8a89-198896338db0";
+      ser = "9bced1af-3f86-425a-a16b-8db01d9475ff";
+    }
 
     final String queryString = String.format("SELECT * FROM %s.%s.segments_daily WHERE episodeId='%s'", db, rp, episodeId);
 
