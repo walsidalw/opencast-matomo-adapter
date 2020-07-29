@@ -51,7 +51,7 @@ public final class OpencastClient {
   private final Cache<String, String> cache;
 
   /**
-   * Create the client
+   * Create the client. If needed, additionally initialize a rate limiter and cache.
    *
    * @param opencastConfig Opencast configuration
    */
@@ -59,15 +59,16 @@ public final class OpencastClient {
     this.opencastConfig = opencastConfig;
     // Initialize HTTP client for Opencast network requests
     final Interceptor interceptor = new HttpLoggingInterceptor();
-    final OkHttpClient.Builder b = new OkHttpClient.Builder().addInterceptor(interceptor)
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS);
+    final OkHttpClient.Builder b = new OkHttpClient.Builder()
+            .addInterceptor(interceptor)
+            // Set timeouts
+            .connectTimeout(opencastConfig.getTimeout(), TimeUnit.SECONDS)
+            .readTimeout(opencastConfig.getTimeout(), TimeUnit.SECONDS)
+            .writeTimeout(opencastConfig.getTimeout(), TimeUnit.SECONDS);
     // Add rate limiter in case network traffic needs to be throttled
     this.client = opencastConfig.getRate() != 0 ?
             b.addInterceptor(new LimitInterceptor(opencastConfig.getRate())).build() :
             b.build();
-
     // Initialize cache, if needed
     this.cache = !opencastConfig.getCacheDuration().isZero() && opencastConfig.getCacheSize() != 0 ?
             CacheBuilder.newBuilder()
@@ -76,6 +77,11 @@ public final class OpencastClient {
                     .build() : null;
   }
 
+  /**
+   * Build retrofit Opencast API.
+   *
+   * @return Retrofit API
+   */
   private OpencastExternalAPI getClient() {
     final Retrofit retrofit = new Retrofit.Builder()
             .baseUrl(this.opencastConfig.getUri())
@@ -85,23 +91,21 @@ public final class OpencastClient {
     return retrofit.create(OpencastExternalAPI.class);
   }
 
+  /**
+   * Send a HTTP GET request to the Opencast Events API. The response contains general episode data
+   * like title, creation date and seriesId.
+   *
+   * @param organization Opencast organizationId
+   * @param episodeId Opencast episode/eventId
+   * @return Response from GET request
+   */
   public Flowable<Response<ResponseBody>> getEventRequest(final String organization, final String episodeId) {
-    /*
-     * TODO: Add timeout exception handling -> retries!
-     */
-
     LOGGER.debug("OCREQUESTSTART, episode {}, organization {}", episodeId, organization);
     return getClient().getEvent(episodeId, getAuthHeader());
   }
 
   private String getAuthHeader() {
-    return basicAuthHeader(this.opencastConfig.getUser(), this.opencastConfig.getPassword());
-  }
-
-  private static String basicAuthHeader(final String user, final String pw) {
-    final String userAndPass = user + ":" + pw;
-    final String userAndPassBase64 = Base64.getEncoder().encodeToString(userAndPass.getBytes(StandardCharsets.UTF_8));
-    return "Basic " + userAndPassBase64;
+    return Utils.basicAuthHeader(this.opencastConfig.getUser(), this.opencastConfig.getPassword());
   }
 
   public Cache<String, String> getCache() {

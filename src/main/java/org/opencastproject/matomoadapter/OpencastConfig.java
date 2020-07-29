@@ -33,6 +33,7 @@ public final class OpencastConfig {
   private final int cacheSize;
   private final Duration cacheDuration;
   private final int rate;
+  private final int timeout;
 
   public OpencastConfig(
           final String uri,
@@ -40,13 +41,15 @@ public final class OpencastConfig {
           final String password,
           final int cacheSize,
           final Duration cacheDuration,
-          final int rate) {
+          final int rate,
+          final int timeout) {
     this.uri = uri;
     this.user = user;
     this.password = password;
     this.cacheSize = cacheSize;
     this.cacheDuration = cacheDuration;
     this.rate = rate;
+    this.timeout = timeout;
   }
 
   public String getUri() {
@@ -70,4 +73,6 @@ public final class OpencastConfig {
   }
 
   public int getRate() { return this.rate; }
+
+  public int getTimeout() { return this.timeout; }
 }

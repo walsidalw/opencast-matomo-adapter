@@ -25,8 +25,10 @@ import org.influxdb.dto.Point;
 import org.json.JSONArray;
 import org.json.JSONException;
 
+import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 
 import io.reactivex.Flowable;
@@ -120,5 +122,11 @@ public final class Utils {
     }
     // If no point in InfluxDB exists yet, return new point from SegmentsImpression
     return Flowable.just(seg.toPoint());
+  }
+
+  public static String basicAuthHeader(final String user, final String pw) {
+    final String userAndPass = user + ":" + pw;
+    final String userAndPassBase64 = Base64.getEncoder().encodeToString(userAndPass.getBytes(StandardCharsets.UTF_8));
+    return "Basic " + userAndPassBase64;
   }
 }

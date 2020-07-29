@@ -52,6 +52,7 @@ public final class ConfigFile {
   private static final String MATOMO_SITEID = "matomo.siteid";
   private static final String MATOMO_TOKEN = "matomo.token";
   private static final String MATOMO_RATE = "matomo.rate-limit";
+  private static final String MATOMO_TIMEOUT = "matomo.timeout";
   // Opencast options
   private static final String OPENCAST_URI = "opencast.external-api.uri";
   private static final String OPENCAST_USER = "opencast.external-api.user";
@@ -59,6 +60,7 @@ public final class ConfigFile {
   private static final String OPENCAST_CACHE_SIZE = "opencast.external-api.max-cache-size";
   private static final String OPENCAST_EXPIRATION_DURATION = "opencast.external-api.cache-expiration-duration";
   private static final String OPENCAST_RATE = "opencast.rate-limit";
+  private static final String OPENCAST_TIMEOUT = "opencast.timeout";
   // Path to last date file
   private static final String ADAPTER_PATH_DATE = "adapter.date-file";
   // Config objects
@@ -82,7 +84,7 @@ public final class ConfigFile {
    * Read and parse config file. Also check for faulty values in critical fields.
    *
    * @param p Path to config file
-   * @return creates and returns config object with all properties saved within
+   * @return Creates and returns config object with all properties saved within
    */
   public static ConfigFile readFile(final Path p) {
     final Properties parsed = new Properties();
@@ -118,7 +120,6 @@ public final class ConfigFile {
    * @return The parsed value
    */
   private static int checkIntProperty(final String name, final String def, final Properties parsed, final Path p) {
-
     int value = 0;
     try {
       value = Integer.parseInt(parsed.getProperty(name, def));
@@ -134,7 +135,6 @@ public final class ConfigFile {
               p, name, def);
       System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
     }
-
     return value;
   }
 
@@ -146,7 +146,6 @@ public final class ConfigFile {
    * @return Opencast config object
    */
   private static OpencastConfig initOpencast(final Properties parsed, final Path p) {
-
     // Parse Opencast config
     final String opencastHost = parsed.getProperty(OPENCAST_URI);
     final String opencastUser = parsed.getProperty(OPENCAST_USER);
@@ -168,15 +167,15 @@ public final class ConfigFile {
       System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
     }
 
-    final int opencastCacheSize = checkIntProperty(OPENCAST_CACHE_SIZE, "1000", parsed, p);
+    final int opencastCacheSize = checkIntProperty(OPENCAST_CACHE_SIZE, "10000", parsed, p);
     final int opencastRateLimit = checkIntProperty(OPENCAST_RATE, "0", parsed, p);
+    final int opencastTimeout = checkIntProperty(OPENCAST_TIMEOUT, "10", parsed, p);
 
     // Create new Opencast config object
     return opencastHost != null && opencastUser != null && opencastPassword != null ?
             new OpencastConfig(opencastHost, opencastUser, opencastPassword,
-                    opencastCacheSize, opencastCacheExpirationDuration, opencastRateLimit) :
+                    opencastCacheSize, opencastCacheExpirationDuration, opencastRateLimit, opencastTimeout) :
             null;
-
   }
 
   /**
@@ -194,14 +193,15 @@ public final class ConfigFile {
 
     // Parse Matomo config
     final String matomoHost = parsed.getProperty(MATOMO_URI);
-    final String matomoSiteId = parsed.getProperty(MATOMO_SITEID);
     final String matomoToken = parsed.getProperty(MATOMO_TOKEN);
 
+    final int matomoSiteId = checkIntProperty(MATOMO_SITEID, "-1", parsed, p);
     final int matomoRateLimit = checkIntProperty(MATOMO_RATE, "0", parsed, p);
+    final int matomoTimeout = checkIntProperty(MATOMO_TIMEOUT, "10", parsed, p);
 
     // Create new Matomo config object
-    return matomoHost != null && matomoSiteId != null && matomoToken != null ?
-            new MatomoConfig(matomoHost, matomoSiteId, matomoToken, matomoRateLimit) :
+    return matomoHost != null && matomoToken != null ?
+            new MatomoConfig(matomoHost, String.valueOf(matomoSiteId), matomoToken, matomoRateLimit, matomoTimeout) :
             null;
   }
 
@@ -213,9 +213,9 @@ public final class ConfigFile {
    * @return InfluxDB config object
    */
   private static InfluxDBConfig initInfluxDB(final Properties parsed, final Path p) {
-
     // Parse InfluxDB config
     final String influxDbUser = parsed.getProperty(INFLUXDB_USER);
+
     if (influxDbUser.isEmpty()) {
       LOGGER.error("Error parsing config file \"{}\": {} cannot be empty", p, INFLUXDB_USER);
       System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
@@ -242,9 +242,7 @@ public final class ConfigFile {
     return this.matomoConfig;
   }
 
-  public OpencastConfig getOpencastConfig() {
-    return this.opencastConfig;
-  }
+  public OpencastConfig getOpencastConfig() { return this.opencastConfig; }
 
   public Path getPathToDate() { return this.lastDatePath; }
 }

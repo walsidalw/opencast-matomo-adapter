@@ -67,13 +67,12 @@ public final class Main {
     // Log configuration
     configureLogManually();
 
-    // Connect and configure InfluxDB
-    try (final InfluxDB influxDB = InfluxDBProcessor.connect(configFile.getInfluxDBConfig())) {
-
-      // Initialize all clients (Opencast, Matomo, InfluxDB)
+    try {
+      // Initialize all clients (Opencast, Matomo)
       final MatomoClient matClient = new MatomoClient(configFile.getMatomoConfig());
       final OpencastClient ocClient = new OpencastClient(configFile.getOpencastConfig());
-      final InfluxDBProcessor influxPro = new InfluxDBProcessor(influxDB, configFile.getInfluxDBConfig());
+      // Connect and configure InfluxDB
+      final InfluxDBProcessor influxPro = new InfluxDBProcessor(configFile.getInfluxDBConfig());
       // Create a file writer for last date information
       final Writer fileWriter;
       // Check the file with last updated date. If no date is present set to yesterday

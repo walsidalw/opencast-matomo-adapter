@@ -50,15 +50,21 @@ public final class InfluxDBProcessor {
   // TEST TEST TEST TEST
   private int count;
 
-  public InfluxDBProcessor(final InfluxDB influxDB, final InfluxDBConfig config) {
-    this.influxDB = influxDB;
+  public InfluxDBProcessor(final InfluxDBConfig config) {
+    this.influxDB = connect(config);
     this.config = config;
     this.batch = BatchPoints.database(config.getDb()).retentionPolicy(config.getRetentionPolicy()).build();
     this.count = 0;
   }
 
+  /**
+   * Query InfluxDB and map the result to a given POJO (plain old Java object). Each point returned one POJO.
+   *
+   * @param query Requested DB query, must contain two placeholders for database and retention policy information
+   * @param clazz POJO class which must be mapped to
+   * @return List of objects mapped from query result
+   */
   public <T> List<T> mapPojo(final String query, final Class<T> clazz) {
-    // Map the result of the InfluxDB query to a list of POJOs
     final String q = String.format(query, this.config.getDb(), this.config.getRetentionPolicy());
     final InfluxDBMapper mapper = new InfluxDBMapper(this.influxDB);
     return mapper.query(new Query(q, this.config.getDb()), clazz);
@@ -103,7 +109,7 @@ public final class InfluxDBProcessor {
    * @param config InfluxDB configuration
    * @return A connected InfluxDB instance
    */
-  public static InfluxDB connect(final InfluxDBConfig config) {
+  private static InfluxDB connect(final InfluxDBConfig config) {
     InfluxDB influxDB = null;
     try {
       influxDB = InfluxDBFactory.connect(config.getHost(), config.getUser(), config.getPassword());

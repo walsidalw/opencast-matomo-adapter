@@ -40,7 +40,9 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 public final class MatomoClient {
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(MatomoClient.class);
 
+  // Filter pattern for view statistics requests. Filters out episodes with 0 views.
   private static final String FILTER_PATTERN = "^[1-9]\\d*$";
+  // Filter out unnecessary columns to shave of some weight from responses
   private static final String SHOW_COL = "label,nb_plays,nb_unique_visitors_impressions,nb_finishes";
 
   private final MatomoConfig matomoConfig;
@@ -57,9 +59,10 @@ public final class MatomoClient {
     final Interceptor interceptor = new HttpLoggingInterceptor();
     final OkHttpClient.Builder b = new OkHttpClient.Builder()
             .addInterceptor(interceptor)
-            .connectTimeout(500, TimeUnit.SECONDS)
-            .readTimeout(500, TimeUnit.SECONDS)
-            .writeTimeout(500, TimeUnit.SECONDS);
+            // Set timeouts
+            .connectTimeout(matomoConfig.getTimeout(), TimeUnit.SECONDS)
+            .readTimeout(matomoConfig.getTimeout(), TimeUnit.SECONDS)
+            .writeTimeout(matomoConfig.getTimeout(), TimeUnit.SECONDS);
     // Add rate limiter in case network traffic needs to be throttled
     this.client = matomoConfig.getRate() != 0 ?
             b.addInterceptor(new LimitInterceptor(matomoConfig.getRate())).build() :
@@ -92,7 +95,6 @@ public final class MatomoClient {
    * @return Raw response to the request (JSONArray/String)
    */
   public Flowable<Response<ResponseBody>> getResourcesRequest(final String date, final String idSubtable) {
-
     final String idSite = this.matomoConfig.getSiteId();
     final String token = this.matomoConfig.getToken();
 

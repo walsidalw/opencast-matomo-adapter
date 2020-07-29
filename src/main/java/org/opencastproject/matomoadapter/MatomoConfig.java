@@ -29,16 +29,19 @@ public final class MatomoConfig {
   private final String siteId;
   private final String token;
   private final int rate;
+  private final int timeout;
 
   public MatomoConfig(
           final String uri,
           final String siteId,
           final String token,
-          final int rate) {
+          final int rate,
+          final int timeout) {
     this.uri = uri;
     this.siteId = siteId;
     this.token = token;
     this.rate = rate;
+    this.timeout = timeout;
   }
 
   public String getUri() {
@@ -56,4 +59,6 @@ public final class MatomoConfig {
   public int getRate() {
     return this.rate;
   }
+
+  public int getTimeout() { return this.timeout; }
 }
