@@ -29,6 +29,7 @@ import org.influxdb.dto.Point;
 import org.influxdb.dto.Pong;
 import org.influxdb.dto.Query;
 import org.influxdb.impl.InfluxDBMapper;
+import org.json.JSONArray;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
@@ -67,11 +68,11 @@ public final class InfluxDBProcessor {
   public static Flowable<Point> checkSegments(final SegmentsImpression seg, final InfluxDB influxDB,
           final InfluxDBConfig config, final ConcurrentLinkedQueue<String> cou) {
 
-    String episodeId = seg.getEpisodeId();
+    final String episodeId = seg.getEpisodeId();
     final String db = config.getDb();
     final String rp = config.getRetentionPolicy();
 
-    String ser;
+    /*String ser;
 
     // TEST TEST TEST TEST
     if (episodeId.equals("05d933ea-8ec0-4a49-bdd2-d8dfa009b291")) {
@@ -80,7 +81,7 @@ public final class InfluxDBProcessor {
     } else if (episodeId.equals("093700de-986e-4476-bb15-81dd5667a290")) {
       episodeId = "8a24880e-7fe9-44c6-8a89-198896338db0";
       ser = "9bced1af-3f86-425a-a16b-8db01d9475ff";
-    }
+    }*/
 
     final String queryString = String.format("SELECT * FROM %s.%s.segments_daily WHERE episodeId='%s'", db, rp, episodeId);
 
@@ -90,14 +91,22 @@ public final class InfluxDBProcessor {
 
     // If an entry of segments for this episode exists
     if (!segmentsPointList.isEmpty()) {
+
+      final JSONArray segJson = seg.getSegments();
+
+      if (segJson.length() == 0)
+        return Flowable.empty();
+
+      final JSONArray combo = MatomoUtils.combineJsonArrays(segJson, segmentsPointList.get(0).getSegments());
+
       // In order to overwrite an entry, the new one needs to have the same timestamp.
       // Implication: "new" updates will always be written with the oldest timestamp of the episode
-      final Instant time = segmentsPointList.get(0).getTime();
+      final Instant date = segmentsPointList.get(0).getTime();
 
       // TEST TEST TEST TEST
       cou.add("te");
       System.out.println("WIP counter: " + cou.size());
-      return Flowable.just(new SegmentsImpression(seg, time).toPoint());
+      return Flowable.just(new SegmentsImpression(seg.getEpisodeId(), seg.getOrganizationId(), combo, date).toPoint());
     }
 
     // TEST TEST TEST TEST

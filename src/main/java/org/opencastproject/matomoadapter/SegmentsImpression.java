@@ -22,6 +22,7 @@
 package org.opencastproject.matomoadapter;
 
 import org.influxdb.dto.Point;
+import org.json.JSONArray;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -34,16 +35,14 @@ import java.util.concurrent.TimeUnit;
 public final class SegmentsImpression {
   private final String episodeId;
   private final String organizationId;
-  private final String segments;
+  private final JSONArray segments;
   private final Instant date;
 
   public SegmentsImpression (
           final String episodeId,
           final String organizationId,
-          final String segments,
-          final OffsetDateTime date,
-          // TEST TEST TEST
-          final ConcurrentLinkedQueue<String> cou) {
+          final JSONArray segments,
+          final Instant date) {
 
 
     /*String ep;
@@ -65,18 +64,7 @@ public final class SegmentsImpression {
     this.episodeId = episodeId;
     this.organizationId = organizationId;
     this.segments = segments;
-    this.date = date.toInstant();
-
-    // TEST TEST TEST TEST
-    cou.add("te");
-    System.out.println("Size WIP: " + cou.size());
-  }
-
-  public SegmentsImpression (final SegmentsImpression seg, final Instant time) {
-    this.episodeId = seg.getEpisodeId();
-    this.organizationId = seg.getOrganizationId();
-    this.segments = seg.getSegments();
-    this.date = time;
+    this.date = date;
   }
 
   /**
@@ -87,7 +75,7 @@ public final class SegmentsImpression {
     return Point
             .measurement("segments_daily")
             .time(this.date.getEpochSecond(), TimeUnit.SECONDS)
-            .addField("segments", this.segments)
+            .addField("segments", this.segments.toString())
             .tag("organizationId", this.organizationId)
             .tag("episodeId", this.episodeId)
             .build();
@@ -97,7 +85,7 @@ public final class SegmentsImpression {
     return this.episodeId;
   }
 
-  public String getSegments() { return this.segments; }
+  public JSONArray getSegments() { return this.segments; }
 
   public String getOrganizationId() { return this.organizationId; }
 }

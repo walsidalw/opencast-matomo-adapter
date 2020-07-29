@@ -26,12 +26,14 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 
+import java.text.DecimalFormat;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import io.reactivex.Flowable;
+import io.reactivex.annotations.NonNull;
 import okhttp3.ResponseBody;
 import retrofit2.Response;
 
@@ -69,22 +71,18 @@ public final class MatomoUtils {
    *
    * @param logger Logger for info/error logging
    * @param client Matomo client instance
-   * @param idSite Site ID from config file
-   * @param token Auth token for Matomo API from config file
    * @param date Date of request
    * @return Returns Flowable with JSONObjects containing episode statistics
    */
   public static Flowable<JSONObject> getResources(
           final Logger logger,
           final MatomoClient client,
-          final String idSite,
-          final String token,
           final String date) {
 
     logger.info("Retrieving resources");
 
     return client
-            .getResourcesRequest(idSite, token, date)
+            .getResourcesRequest(date, null)
             .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
             .map(MatomoUtils::getResourcesJson)
             .flatMapIterable(json -> json);
@@ -104,23 +102,57 @@ public final class MatomoUtils {
   private static Flowable<String> getSegments(
           final Logger logger,
           final MatomoClient client,
-          final String idSite,
-          final String token,
-          final Impression impression,
-          final String endDate) {
+          final String subtable,
+          final String date) {
 
-    final String episodeId = impression.getEpisodeId();
-    final String startDate = impression.getStartDate();
-
-    final String period = String.format("%s,%s", startDate, endDate);
-
-    logger.info("Retrieving segments for episode {}", episodeId);
+    logger.info("Retrieving segments for date: {}, subtable: {}", date, subtable);
 
     return client
-            .getSegmentsRequest(idSite, token, episodeId, period)
+            .getResourcesRequest(date, subtable)
             .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
             // Filter out all empty responses
             .filter(x -> x.length() > 2);
+  }
+
+  @NonNull
+  public static JSONArray combineJsonArrays(final JSONArray old, final String json) {
+    if (json.length() > 2) {
+
+      try {
+
+        final JSONArray freshJson = new JSONArray(json);
+
+        if (old.length() == 0)
+          return freshJson;
+
+        final int minLength = Math.min(old.length(), freshJson.length());
+        final JSONArray combo = old.length() > freshJson.length() ? old : freshJson;
+
+        for (int i = 0; i < minLength; i++) {
+          final DecimalFormat df = new DecimalFormat("#.##");
+
+          // Update values: old value from InfluxDB + new value from Matomo
+          final int plays = Integer.parseInt(old.getJSONObject(i).getString("nb_plays")) +
+                  Integer.parseInt(freshJson.getJSONObject(i).getString("nb_plays"));
+
+          final int sum = Integer.parseInt(old.getJSONObject(i).getString("sum_plays")) +
+                  Integer.parseInt(freshJson.getJSONObject(i).getString("sum_plays"));
+
+          final double rate = (double) plays / (double) sum;
+
+          // Update JSONObjects with new values
+          combo.getJSONObject(i).put("nb_plays", String.valueOf(plays));
+          combo.getJSONObject(i).put("sum_plays", String.valueOf(sum));
+          combo.getJSONObject(i).put("play_rate", df.format(rate));
+        }
+
+
+        return combo;
+      } catch (final JSONException e) {
+        throw new ParsingJsonSyntaxException(json);
+      }
+    }
+    return old;
   }
 
   /**
@@ -139,18 +171,20 @@ public final class MatomoUtils {
           final Logger logger,
           final MatomoClient client,
           final Impression impression,
-          final String idSite,
-          final String token,
           final String date,
           final OffsetDateTime time,
           // TEST TEST TEST TEST
           final ConcurrentLinkedQueue<String> cou) {
 
-    return getSegments(logger, client, idSite, token, impression, date)
-            .flatMap(json -> Flowable.just(new SegmentsImpression(
-                    impression.getEpisodeId(), "mh_default", json, time, cou)));
-  }
+    final JSONArray resultJson = new JSONArray();
 
+    return Flowable.just(impression.getSubtables()).flatMapIterable(imp -> imp)
+            .flatMap(subtable -> getSegments(logger, client, subtable, date))
+            .reduce(resultJson, MatomoUtils::combineJsonArrays)
+            .toFlowable()
+            .flatMap(json -> Flowable.just(new SegmentsImpression(
+                    impression.getEpisodeId(), "mh_default", json, time.toInstant())));
+  }
 
   /**
    * Filter out invalid HTTP requests

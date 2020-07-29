@@ -87,6 +87,11 @@ public final class Main {
 
       getViewStats(matClient, ocClient, influxDB, configFile, days, dateNow);
 
+      /*
+       * TODO: Save date after every daily run, not after all runs
+       */
+
+
       fileWriter = new FileWriter(String.valueOf(p), false);
       fileWriter.write(dateNow.toString());
       fileWriter.flush();
@@ -149,44 +154,39 @@ public final class Main {
       final String queryDate = dateNow.minusDays(i).toString();
 
       // First, get all statistical data for all viewed episodes on given date
-      MatomoUtils.getResources(LOGGER, matClient, configFile.getMatomoConfig().getSiteId(),
-              configFile.getMatomoConfig().getToken(), queryDate)
-              .parallel()
-              .runOn(Schedulers.io())
+      MatomoUtils.getResources(LOGGER, matClient, queryDate)
               // Convert raw JSONObjects to Impressions
-              .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, influxTime, count))
-              .sequential()
+              .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, influxTime, count).subscribeOn(Schedulers.io()))
               // Filter out / unite duplicates
               .reduce(seed, OpencastUtils::filterImpressions)
               .flattenAsFlowable(impressions -> impressions)
-              .parallel()
-              .runOn(Schedulers.io())
               // Get Points from Impressions
-              .map(Impression::toPoint)
-              .sequential()
+              .flatMap(impression -> Flowable.just(impression).subscribeOn(Schedulers.io()).map(Impression::toPoint))
               // Add all points to InfluxDB batch, instead of writing each separately
               .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
 
       influxPro.writeBatchReset(influxDB);
 
+      /*
+       * TODO: New workflow for segments: for each confirmed episode, store every idSubtable within Impression
+       *  Then in the second phase, request stats for each idSubtable and combine them. Finally if data point already
+       *  exists, fetch it and combine new and old --> output a point (write/overwrite)
+       */
+
       // List of unique Impressions tells us, for which episodes we need to fetch segment data
-      /*Flowable.just(seed).flatMapIterable(impressions -> impressions)
-              .parallel()
-              .runOn(Schedulers.io())
+      Flowable.just(seed).flatMapIterable(impressions -> impressions)
               // Request segment statistics and build SegmentsPoints
               .flatMap(impression -> MatomoUtils.makeSegmentsImpression(LOGGER, matClient, impression,
-                      configFile.getMatomoConfig().getSiteId(), configFile.getMatomoConfig().getToken(),
                       queryDate, influxTime, counter))
               // If a InfluxDB point for an episode exists, overwrite it. Otherwise,
               .flatMap(seg -> InfluxDBProcessor.checkSegments(seg, influxDB, configFile.getInfluxDBConfig(), counter2))
-              .sequential()
               .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
 
       // TEST TEST TEST TEST
       System.out.println("Size of cache: " + ocClient.getCache().size());
       System.out.println("Size of filtered list: " + seed.size());
 
-      influxPro.writeBatchReset(influxDB);*/
+      influxPro.writeBatchReset(influxDB);
 
       // Remove all elements from list for it to be reused
       seed.clear();

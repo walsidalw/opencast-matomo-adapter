@@ -40,6 +40,9 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 public final class MatomoClient {
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(MatomoClient.class);
 
+  private static final String FILTER_PATTERN = "^[1-9]\\d*$";
+  private static final String SHOW_COL = "label,nb_plays,nb_unique_visitors_impressions,nb_finishes";
+
   private final MatomoConfig matomoConfig;
   private final OkHttpClient client;
 
@@ -78,19 +81,31 @@ public final class MatomoClient {
   }
 
   /**
-   * Send a HTTP GET request to the Matomo MediaAnalytics.getVideoResources API. The expected response
-   * is a JSONArray containing all relevant statistical data for every episode played at least once on
-   * the specified date.
+   * Send a HTTP GET request to the Matomo MediaAnalytics.getVideoResources API. If given idSubtable is null,
+   * the expected response is a JSONArray containing all relevant statistical data for every episode played at
+   * least once on the specified date.
+   * If an idSubtable is provided, the response should contain video segments information for given date and
+   * idSubtable.
    *
-   * @param idSite Site ID from the config file
-   * @param token Auth token for Matomo API from the config file
-   * @param date Date for requested statistics
-   * @return Raw response to the request (JSONArray)
+   * @param date Date for which statistics are requested
+   * @param idSubtable Unique identifier of a resource on given date. If null, return all viewed episodes
+   * @return Raw response to the request (JSONArray/String)
    */
-  public Flowable<Response<ResponseBody>> getResourcesRequest(final String idSite, final String token,
-                                                              final String date) {
-    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoResources, date: {}", date);
-    return getClient().getResources(idSite, token, date);
+  public Flowable<Response<ResponseBody>> getResourcesRequest(final String date, final String idSubtable) {
+
+    final String idSite = this.matomoConfig.getSiteId();
+    final String token = this.matomoConfig.getToken();
+
+    // If no idSubtable was passed, it is assumed, that a list of all played episodes is requested
+    if(idSubtable == null) {
+      LOGGER.debug("MATOMOREQUESTSTART, method: getVideoResources, date: {}", date);
+      return getClient().getResources(idSite, token, date, "1",
+              FILTER_PATTERN, "nb_plays", SHOW_COL, "");
+    }
+    // Otherwise, request video segments information for given date and idSubtable
+    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoSegments, date: {}, idSubtable: {}", date, idSubtable);
+    return getClient().getResources(idSite, token, date, idSubtable,
+            "", "", "", "media_segments");
   }
 
   /**

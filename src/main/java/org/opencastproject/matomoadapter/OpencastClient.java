@@ -48,7 +48,7 @@ public final class OpencastClient {
 
   private final OpencastConfig opencastConfig;
   private final OkHttpClient client;
-  private final Cache<String, OpencastDataPair> cache;
+  private final Cache<String, String> cache;
 
   /**
    * Create the client
@@ -104,7 +104,7 @@ public final class OpencastClient {
     return "Basic " + userAndPassBase64;
   }
 
-  public Cache<String, OpencastDataPair> getCache() {
+  public Cache<String, String> getCache() {
     return this.cache;
   }
 }

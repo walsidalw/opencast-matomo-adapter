@@ -58,7 +58,7 @@ public final class OpencastUtils {
    * @return Either a series ID or <code>Optional.empty()</code>
    */
   @SuppressWarnings("unchecked")
-  private static Optional<OpencastDataPair> dataPairForEventJson(final String eventJson) {
+  private static Optional<String> seriesForEventJson(final String eventJson) {
     /*
     TODO: Use only one JSON handler GSON/JSONObject
      */
@@ -66,10 +66,8 @@ public final class OpencastUtils {
       final Map<String, Object> m = new Gson().fromJson(eventJson, Map.class);
       if (m != null) {
         final Object isPartOf = m.get("is_part_of");
-        final Object start = m.get("start");
-        if ((isPartOf instanceof String) && (start instanceof String)) {
-          final String startDate = ((String) start).substring(0, 10);
-          return Optional.of(new OpencastDataPair((String) isPartOf, startDate));
+        if (isPartOf instanceof String) {
+          return Optional.of((String) isPartOf);
         }
       }
       return Optional.empty();
@@ -87,7 +85,7 @@ public final class OpencastUtils {
    * @param episodeId         The episode ID
    * @return Either a singleton <code>Flowable</code> with the resulting series ID, or an empty <code>Flowable</code>
    */
-  private static Flowable<OpencastDataPair> dataPairForEvent(
+  private static Flowable<String> seriesForEvent(
           final Logger logger,
           final OpencastClient client,
           final String organization,
@@ -95,10 +93,10 @@ public final class OpencastUtils {
           // TEST TEST TEST TEST
           final Collection<String> count) {
 
-    final Cache<String, OpencastDataPair> cache = client.getCache();
+    final Cache<String, String> cache = client.getCache();
 
     // Check if cache exists and then check, if the eventId is already stored
-    final OpencastDataPair cachedId = cache != null ? cache.getIfPresent(episodeId) : null;
+    final String cachedId = cache != null ? cache.getIfPresent(episodeId) : null;
 
     // If the eventId already has an entry with a corresponding seriesId, return seriesId
     if (cachedId != null) {
@@ -113,12 +111,12 @@ public final class OpencastUtils {
     return client
             .getEventRequest(organization, episodeId)
             .concatMap(body -> OpencastUtils.checkResponseCode(logger, body, organization, episodeId))
-            .map(OpencastUtils::dataPairForEventJson)
-            .concatMap(dataPair -> {
-              if (dataPair.isPresent()) {
+            .map(OpencastUtils::seriesForEventJson)
+            .concatMap(series -> {
+              if (series.isPresent()) {
                 if (cache != null)
-                  cache.put(episodeId, dataPair.get());
-                return Flowable.just(dataPair.get());
+                  cache.put(episodeId, series.get());
+                return Flowable.just(series.get());
               }
               return Flowable.empty();
             });
@@ -161,7 +159,7 @@ public final class OpencastUtils {
     final boolean correctResponse = x.code() / 200 == 1;
     if (!correctResponse) {
       if (x.code() == 404) {
-        logger.info("OCHTTPWARNING, episode {}, organization {}: code, {}", x.code(), episodeId, organization);
+        logger.info("OCHTTPWARNING, episode {}, organization {}: code, {}", episodeId, organization, x.code());
         return Flowable.empty();
       }
       logger.error("OCHTTPERROR, episode {}, organization {}: code, {}", x.code(), episodeId, organization);
@@ -187,7 +185,7 @@ public final class OpencastUtils {
           @SuppressWarnings("SameParameterValue") final Logger logger,
           final OpencastClient client,
           final JSONObject json,
-          final OffsetDateTime time,
+          final OffsetDateTime date,
           // TEST TEST TEST TEST
           final Collection<String> count) {
 
@@ -204,11 +202,13 @@ public final class OpencastUtils {
       final int plays = json.getInt("nb_plays");
       final int visits = json.getInt("nb_unique_visitors_impressions");
       final int finishes = json.getInt("nb_finishes");
+      final ArrayList<String> idSubtables = new ArrayList<>();
+      idSubtables.add(json.getString("idsubdatatable"));
 
       // Create new Impression Flowable with series data from Opencast
-      return dataPairForEvent(logger, client, "org", episodeId, count)
-              .flatMap(dataPair -> Flowable.just(new Impression(episodeId, "mh_default_org",
-                      dataPair.getSeriesId(), dataPair.getStartDate(), plays, visits, finishes, time)));
+      return seriesForEvent(logger, client, "org", episodeId, count)
+              .flatMap(series -> Flowable.just(new Impression(episodeId, "mh_default_org",
+                      series, plays, visits, finishes, date, idSubtables)));
 
     } catch (final JSONException e) {
       throw new ParsingJsonSyntaxException(json.toString());
@@ -235,10 +235,11 @@ public final class OpencastUtils {
       final int plays = old.getPlays() + newImpression.getPlays();
       final int visitors = old.getVisitors() + newImpression.getVisitors();
       final int finishes = old.getFinishes() + newImpression.getFinishes();
+      final ArrayList<String> idSubtables = old.getSubtables();
+      idSubtables.addAll(newImpression.getSubtables());
 
-      final Impression combined = new Impression(episodeId, old.getOrganizationId(), old.getSeriesId(),
-              old.getStartDate(), plays,
-              visitors, finishes, old.getDate());
+      final Impression combined = new Impression(episodeId, old.getOrganizationId(), old.getSeriesId(), plays,
+              visitors, finishes, old.getDate(), idSubtables);
 
       oldList.remove(old);
       oldList.add(combined);

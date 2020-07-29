@@ -26,4 +26,6 @@ public class SegmentsPoint {
   private String segments;
 
   public Instant getTime() { return this.time; }
+
+  public String getSegments() { return this.segments; }
 }
