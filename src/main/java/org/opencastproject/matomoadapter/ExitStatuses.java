@@ -72,6 +72,10 @@ public final class ExitStatuses {
    * There was some syntax error with the configuration file given
    */
   public static final int CONFIG_FILE_PARSE_ERROR = 11;
+  /**
+   * There was an error with file reading/writing
+   */
+  public static final int FILE_HANDLING_ERROR = 12;
 
   private ExitStatuses() {
   }

@@ -29,14 +29,8 @@ import org.influxdb.dto.Point;
 import org.influxdb.dto.Pong;
 import org.influxdb.dto.Query;
 import org.influxdb.impl.InfluxDBMapper;
-import org.json.JSONArray;
 import org.slf4j.LoggerFactory;
-
-import java.time.Instant;
 import java.util.List;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
-import io.reactivex.Flowable;
 
 /**
  * Handles all processes relevant to InfluxDB

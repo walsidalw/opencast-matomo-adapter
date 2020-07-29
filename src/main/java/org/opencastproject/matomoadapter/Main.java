@@ -21,7 +21,6 @@
 
 package org.opencastproject.matomoadapter;
 
-import org.influxdb.InfluxDB;
 import org.influxdb.InfluxDBIOException;
 import org.slf4j.LoggerFactory;
 
@@ -33,10 +32,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.Period;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -48,22 +47,16 @@ import io.reactivex.Flowable;
 import io.reactivex.schedulers.Schedulers;
 
 public final class Main {
-
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
   private Main() {
   }
 
   public static void main(final String[] args) {
-
-    // TEST TEST TEST TEST
-    final long start = System.nanoTime();
-
     // Preliminaries: command line parsing, config file parsing
     final CommandLine commandLine = CommandLine.parse(args);
     final ConfigFile configFile = ConfigFile.readFile(commandLine.getConfigFile());
     final Path p = configFile.getPathToDate();
-
     // Log configuration
     configureLogManually();
 
@@ -73,27 +66,19 @@ public final class Main {
       final OpencastClient ocClient = new OpencastClient(configFile.getOpencastConfig());
       // Connect and configure InfluxDB
       final InfluxDBProcessor influxPro = new InfluxDBProcessor(configFile.getInfluxDBConfig());
-      // Create a file writer for last date information
-      final Writer fileWriter;
-      // Check the file with last updated date. If no date is present set to yesterday
-      final LocalDate lastDate = Files.lines(p).findFirst().isPresent() ?
-              LocalDate.parse(Files.lines(p).findFirst().get()) :
-              LocalDate.now().minusDays(1);
 
-      final LocalDate dateNow = LocalDate.now();
-
-      // Days between today and the last update
-      final int days = (int)ChronoUnit.DAYS.between(lastDate, dateNow);
-
-      getViewStats(matClient, ocClient, influxPro, days, dateNow);
-
-      /*
-       * TODO: Save date after every daily run, not after all runs
-       */
-
-      fileWriter = new FileWriter(String.valueOf(p), false);
-      fileWriter.write(dateNow.toString());
-      fileWriter.flush();
+      // Schedule a task for updates
+      final TimerTask scheduledTask = new TimerTask() {
+        public void run() {
+          getStatisticsDaily(matClient, ocClient, influxPro, p);
+          LOGGER.info("Statistics updated on: {}", LocalDate.now());
+        }
+      };
+      final Timer timer = new Timer("Timer");
+      final long delay = 1000L;
+      // Period between executions
+      final long period = 1000L * 60L * 60L * 24L * configFile.getInterval();
+      timer.scheduleAtFixedRate(scheduledTask, delay, period);
 
     } catch (final MatomoClientConfigurationException e) {
       LOGGER.error("Matomo configuration error: ", e);
@@ -108,8 +93,51 @@ public final class Main {
         LOGGER.error("InfluxDB error: " + e.getMessage());
       }
       System.exit(ExitStatuses.INFLUXDB_RUNTIME_ERROR);
+    }
+  }
+
+  /**
+   * Checks the last date in file and updates statistics for each day between that date and today.
+   * After finishing a day, updates the date file.
+   *
+   * @param matClient Matomo external API client instance
+   * @param ocClient Opencast external API client instance
+   * @param influxPro InfluxDBProcessor instance
+   * @param p Path to file containing the last update date
+   */
+  private static void getStatisticsDaily(final MatomoClient matClient, final OpencastClient ocClient,
+          final InfluxDBProcessor influxPro, final Path p) {
+
+    // TEST TEST TEST TEST
+    final long start = System.nanoTime();
+
+    try {
+      // Check the file with last updated date. If no date is present set to yesterday
+      final LocalDate lastDate = Files.lines(p).findFirst().isPresent() ?
+              LocalDate.parse(Files.lines(p).findFirst().get()) :
+              LocalDate.now().minusDays(1);
+
+      final LocalDate dateNow = LocalDate.now();
+      // Days between today and the last update
+      final int days = (int) ChronoUnit.DAYS.between(lastDate, dateNow);
+
+      // Execute following steps for each day between the last update and today
+      for (int i = days; i > 0; i--) {
+        // Used as timestamp for InfluxDB points
+        final OffsetDateTime influxTime = OffsetDateTime.now().minusDays(i);
+        // Needed for Matomo external API calls
+        final String queryDate = dateNow.minusDays(i).toString();
+        // Get statistics for current date (queryDate)
+        getStatistics(matClient, ocClient, influxPro, queryDate, influxTime);
+        // Write current date into file
+        final Writer fileWriter = new FileWriter(String.valueOf(p), false);
+        fileWriter.write(dateNow.minusDays(i-1).toString());
+        fileWriter.flush();
+        fileWriter.close();
+      }
     } catch (final IOException e) {
-      e.printStackTrace();
+      LOGGER.error("File handling error: ", e);
+      System.exit(ExitStatuses.FILE_HANDLING_ERROR);
     }
     // TEST TEST TEST TEST
     final long end = System.nanoTime();
@@ -124,69 +152,50 @@ public final class Main {
    * @param matClient Matomo external API client instance
    * @param ocClient Opencast external API client instance
    * @param influxPro InfluxDBProcessor instance
-   * @param days Number of days between the last update and today
-   * @param dateNow Today's date
+   * @param queryDate Date for the requests
+   * @param influxTime Date for InfluxDB timestamps
    */
-  private static void getViewStats(final MatomoClient matClient, final OpencastClient ocClient,
-                                   final InfluxDBProcessor influxPro, final int days,
-                                   final LocalDate dateNow) {
-
-    // TEST TEST TEST TEST
-    final ArrayList<String> count = new ArrayList<>();
-    final ConcurrentLinkedQueue<String> counter2 = new ConcurrentLinkedQueue<>();
+  private static void getStatistics(final MatomoClient matClient, final OpencastClient ocClient,
+                                    final InfluxDBProcessor influxPro,
+                                    final String queryDate, final OffsetDateTime influxTime) {
 
     // Used as seed in reduce method, as well as starting point in the second phase. After the first phase,
     // it contains all the unique episode impressions from one day.
     final ArrayList<Impression> seed = new ArrayList<>();
 
-    // Execute following steps for each day between the last update and today
-    for (int i = days; i > 0; i--) {
+    // First, get all statistical data for all viewed episodes on given date
+    MatomoUtils.getResources(LOGGER, matClient, queryDate)
+            // Convert raw JSONObjects to Impressions
+            .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, influxTime)
+                    .subscribeOn(Schedulers.io()))
+            // Filter out / unite duplicate impressions. Outgoing stream contains unique episode impressions
+            .reduce(seed, OpencastUtils::filterImpressions)
+            .flattenAsFlowable(impressions -> impressions)
+            // Get Points from Impressions
+            .flatMap(impression -> Flowable.just(impression)
+                    .subscribeOn(Schedulers.io()).map(Impression::toPoint))
+            // Add all points to InfluxDB batch, instead of writing each point separately
+            .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
 
-      // Used as timestamp for InfluxDB points
-      final OffsetDateTime influxTime = OffsetDateTime.now().minusDays(i);
-      // Needed for Matomo external API calls
-      final String queryDate = dateNow.minusDays(i).toString();
+    // Write view statistics to InfluxDB
+    influxPro.writeBatchReset();
 
-      // First, get all statistical data for all viewed episodes on given date
-      MatomoUtils.getResources(LOGGER, matClient, queryDate)
-              // Convert raw JSONObjects to Impressions
-              .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, influxTime, count)
-                      .subscribeOn(Schedulers.io()))
-              // Filter out / unite duplicate impressions. Outgoing stream contains unique episode impressions
-              .reduce(seed, OpencastUtils::filterImpressions)
-              .flattenAsFlowable(impressions -> impressions)
-              // Get Points from Impressions
-              .flatMap(impression -> Flowable.just(impression).subscribeOn(Schedulers.io()).map(Impression::toPoint))
-              // Add all points to InfluxDB batch, instead of writing each point separately
-              .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
+    // List of unique impressions tells us, for which episodes we need to fetch segment data
+    Flowable.just(seed).flatMapIterable(impressions -> impressions)
+            // Request segment statistics and build SegmentsPoints
+            .flatMap(impression -> MatomoUtils.makeSegmentsImpression(LOGGER, matClient, impression,
+                    queryDate, influxTime).subscribeOn(Schedulers.io()))
+            // If an InfluxDB point for an episode exists, overwrite it. Otherwise, insert point normally
+            .flatMap(seg -> Utils.checkSegments(seg, influxPro)
+                    .subscribeOn(Schedulers.io()))
+            .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
 
-      // Write view statistics to InfluxDB
-      influxPro.writeBatchReset();
+    // (Over-)Write segment statistics to InfluxDB
+    influxPro.writeBatchReset();
 
-      // List of unique impressions tells us, for which episodes we need to fetch segment data
-      Flowable.just(seed).flatMapIterable(impressions -> impressions)
-              // Request segment statistics and build SegmentsPoints
-              .flatMap(impression -> MatomoUtils.makeSegmentsImpression(LOGGER, matClient, impression,
-                      queryDate, influxTime).subscribeOn(Schedulers.io()))
-              // If an InfluxDB point for an episode exists, overwrite it. Otherwise, insert point normally
-              .flatMap(seg -> Utils.checkSegments(seg, influxPro)
-                      .subscribeOn(Schedulers.io()))
-              .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
-
-      // TEST TEST TEST TEST
-      System.out.println("Size of cache: " + ocClient.getCache().size());
-      System.out.println("Size of filtered list: " + seed.size());
-
-      // (Over-)Write segment statistics to InfluxDB
-      influxPro.writeBatchReset();
-      // Remove all elements from list for it to be reused
-      seed.clear();
-
-      // TEST TEST TEST TEST
-      counter2.clear();
-    }
     // TEST TEST TEST TEST
-    System.out.println("Saved Opencast requests: " + count.size());
+    System.out.println("Size of cache: " + ocClient.getCache().size());
+    System.out.println("Size of filtered list: " + seed.size());
   }
 
   /**

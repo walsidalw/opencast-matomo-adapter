@@ -63,21 +63,25 @@ public final class ConfigFile {
   private static final String OPENCAST_TIMEOUT = "opencast.timeout";
   // Path to last date file
   private static final String ADAPTER_PATH_DATE = "adapter.date-file";
+  private static final String ADAPTER_TIME_INTERVAL = "adapter.time-interval";
   // Config objects
   private final InfluxDBConfig influxDBConfig;
   private final MatomoConfig matomoConfig;
   private final OpencastConfig opencastConfig;
   private final Path lastDatePath;
+  private final int interval;
 
   private ConfigFile(
           final InfluxDBConfig influxDBConfig,
           final MatomoConfig matomoConfig,
           final OpencastConfig opencastConfig,
-          final Path lastDatePath) {
+          final Path lastDatePath,
+          final int interval) {
     this.influxDBConfig = influxDBConfig;
     this.matomoConfig = matomoConfig;
     this.opencastConfig = opencastConfig;
     this.lastDatePath = lastDatePath;
+    this.interval = interval;
   }
 
   /**
@@ -102,12 +106,14 @@ public final class ConfigFile {
 
     // Path to file with last update date
     final Path pathToLastDate = Path.of(parsed.getProperty(ADAPTER_PATH_DATE));
+    final int timeInterval = checkIntProperty(ADAPTER_TIME_INTERVAL, "1", parsed, p);
 
     // Initialized the ConfigFile Object with filled in properties for InfluxDB, Matomo and Opencast
     return new ConfigFile(initInfluxDB(parsed, p),
                           initMatomo(parsed, p),
                           initOpencast(parsed, p),
-                          pathToLastDate);
+                          pathToLastDate,
+                          timeInterval);
   }
 
   /**
@@ -186,11 +192,6 @@ public final class ConfigFile {
    * @return Matomo config object
    */
   private static MatomoConfig initMatomo(final Properties parsed, final Path p) {
-
-    /*
-     * TODO: Add check for Matomo config - valid SiteID and token
-     */
-
     // Parse Matomo config
     final String matomoHost = parsed.getProperty(MATOMO_URI);
     final String matomoToken = parsed.getProperty(MATOMO_TOKEN);
@@ -213,7 +214,6 @@ public final class ConfigFile {
    * @return InfluxDB config object
    */
   private static InfluxDBConfig initInfluxDB(final Properties parsed, final Path p) {
-    // Parse InfluxDB config
     final String influxDbUser = parsed.getProperty(INFLUXDB_USER);
 
     if (influxDbUser.isEmpty()) {
@@ -245,4 +245,6 @@ public final class ConfigFile {
   public OpencastConfig getOpencastConfig() { return this.opencastConfig; }
 
   public Path getPathToDate() { return this.lastDatePath; }
+
+  public int getInterval() { return this.interval; }
 }

@@ -89,9 +89,7 @@ public final class OpencastUtils {
           final Logger logger,
           final OpencastClient client,
           final String organization,
-          final String episodeId,
-          // TEST TEST TEST TEST
-          final Collection<String> count) {
+          final String episodeId) {
 
     final Cache<String, String> cache = client.getCache();
 
@@ -99,11 +97,9 @@ public final class OpencastUtils {
     final String cachedId = cache != null ? cache.getIfPresent(episodeId) : null;
 
     // If the eventId already has an entry with a corresponding seriesId, return seriesId
-    if (cachedId != null) {
-      // TEST TEST TEST TEST
-      count.add("val");
+    if (cachedId != null)
       return Flowable.just(cachedId);
-    }
+
 
     logger.info("Retrieving series and start date for organization \"{}\", episode \"{}\"...", organization, episodeId);
 
@@ -175,7 +171,7 @@ public final class OpencastUtils {
    * Subsequently, the Opencast Event API is called for relevant series information (seriesID).
    * Finally, all required data is saved and returned within an Impression Object.
    *
-   * @param time Date for which the data is requested
+   * @param date Date for which the data is requested
    * @param logger Logger from the main method
    * @param client Opencast client used for the event API request
    * @param json JSON object representing one video and its statistics
@@ -185,9 +181,7 @@ public final class OpencastUtils {
           @SuppressWarnings("SameParameterValue") final Logger logger,
           final OpencastClient client,
           final JSONObject json,
-          final OffsetDateTime date,
-          // TEST TEST TEST TEST
-          final Collection<String> count) {
+          final OffsetDateTime date) {
 
     try {
       // Extract data from JSON
@@ -206,7 +200,7 @@ public final class OpencastUtils {
       idSubtables.add(json.getString("idsubdatatable"));
 
       // Create new Impression Flowable with series data from Opencast
-      return seriesForEvent(logger, client, "org", episodeId, count)
+      return seriesForEvent(logger, client, "org", episodeId)
               .flatMap(series -> Flowable.just(new Impression(episodeId, "mh_default_org",
                       series, plays, visits, finishes, date, idSubtables)));
 
