@@ -39,8 +39,7 @@ public final class Impression {
   private final int visitors;
   private final int finishes;
   private final OffsetDateTime date;
-
-  private final ArrayList<String> subtables;
+  private final ArrayList<String> idSubtables;
 
   public Impression(
           final String episodeId,
@@ -50,7 +49,7 @@ public final class Impression {
           final int visitors,
           final int finishes,
           final OffsetDateTime date,
-          final ArrayList<String> subtables) {
+          final ArrayList<String> idSubtables) {
     this.episodeId = episodeId;
     this.organizationId = organizationId;
     this.seriesId = seriesId;
@@ -58,7 +57,7 @@ public final class Impression {
     this.visitors = visitors;
     this.finishes = finishes;
     this.date = date;
-    this.subtables = subtables;
+    this.idSubtables = idSubtables;
   }
 
   /**
@@ -107,5 +106,5 @@ public final class Impression {
 
   public OffsetDateTime getDate() { return this.date; }
 
-  public ArrayList<String> getSubtables() { return this.subtables; }
+  public ArrayList<String> getSubtables() { return this.idSubtables; }
 }

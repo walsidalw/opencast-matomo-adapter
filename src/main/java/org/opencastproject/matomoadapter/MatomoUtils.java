@@ -26,14 +26,11 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 
-import java.text.DecimalFormat;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 import io.reactivex.Flowable;
-import io.reactivex.annotations.NonNull;
 import okhttp3.ResponseBody;
 import retrofit2.Response;
 
@@ -67,19 +64,16 @@ public final class MatomoUtils {
   }
 
   /**
-   * Invoke a request to the Matomo MediaAnalytics.getVideoResources API.
+   * Invoke a request to the Matomo MediaAnalytics.getVideoResources API for view statistics.
    *
    * @param logger Logger for info/error logging
    * @param client Matomo client instance
    * @param date Date of request
    * @return Returns Flowable with JSONObjects containing episode statistics
    */
-  public static Flowable<JSONObject> getResources(
-          final Logger logger,
-          final MatomoClient client,
-          final String date) {
-
-    logger.info("Retrieving resources");
+  public static Flowable<JSONObject> getResources(final Logger logger, final MatomoClient client,
+                                                  final String date) {
+    logger.info("Retrieving resources for date: {}", date);
 
     return client
             .getResourcesRequest(date, null)
@@ -89,98 +83,45 @@ public final class MatomoUtils {
   }
 
   /**
-   * Invoke a request to the Matomo MediaAnalytics.getVideoTitles API and filter out empty responses.
+   * Invoke a request to the Matomo MediaAnalytics.getVideoResources API
+   * for media segments and filter out empty responses.
    *
    * @param logger Logger for info/error logging
    * @param client Matomo client instance
-   * @param idSite Site ID from config file
-   * @param token Auth token for Matomo API from config file
-   * @param impression Contains all necessary episode information
-   * @param endDate Date of request
+   * @param idSubtable Unique identifier for a player-episode pair on given date
+   * @param date Date of request
    * @return Returns Flowable with Strings containing segment statistics
    */
-  private static Flowable<String> getSegments(
-          final Logger logger,
-          final MatomoClient client,
-          final String subtable,
-          final String date) {
-
-    logger.info("Retrieving segments for date: {}, subtable: {}", date, subtable);
+  private static Flowable<String> getSegments(final Logger logger, final MatomoClient client,
+                                              final String idSubtable, final String date) {
+    logger.info("Retrieving segments for date: {}, idSubtable: {}", date, idSubtable);
 
     return client
-            .getResourcesRequest(date, subtable)
+            .getResourcesRequest(date, idSubtable)
             .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
             // Filter out all empty responses
             .filter(x -> x.length() > 2);
   }
 
-  @NonNull
-  public static JSONArray combineJsonArrays(final JSONArray old, final String json) {
-    if (json.length() > 2) {
-
-      try {
-
-        final JSONArray freshJson = new JSONArray(json);
-
-        if (old.length() == 0)
-          return freshJson;
-
-        final int minLength = Math.min(old.length(), freshJson.length());
-        final JSONArray combo = old.length() > freshJson.length() ? old : freshJson;
-
-        for (int i = 0; i < minLength; i++) {
-          final DecimalFormat df = new DecimalFormat("#.##");
-
-          // Update values: old value from InfluxDB + new value from Matomo
-          final int plays = Integer.parseInt(old.getJSONObject(i).getString("nb_plays")) +
-                  Integer.parseInt(freshJson.getJSONObject(i).getString("nb_plays"));
-
-          final int sum = Integer.parseInt(old.getJSONObject(i).getString("sum_plays")) +
-                  Integer.parseInt(freshJson.getJSONObject(i).getString("sum_plays"));
-
-          final double rate = (double) plays / (double) sum;
-
-          // Update JSONObjects with new values
-          combo.getJSONObject(i).put("nb_plays", String.valueOf(plays));
-          combo.getJSONObject(i).put("sum_plays", String.valueOf(sum));
-          combo.getJSONObject(i).put("play_rate", df.format(rate));
-        }
-
-
-        return combo;
-      } catch (final JSONException e) {
-        throw new ParsingJsonSyntaxException(json);
-      }
-    }
-    return old;
-  }
-
   /**
-   * Prompts an API call and converts it to a SegmentsImpression.
+   * Prompts an API call and converts the response to a SegmentsImpression. If no segment data is
+   * available for the given impression/episode, empty Flowable is returned.
    *
    * @param logger Logger for info/error logging
    * @param client Matomo client instance
    * @param impression Contains all necessary episode information
-   * @param idSite Site ID from config file
-   * @param token Auth token for Matomo API from config file
    * @param date Date of request
    * @param time Timestamp for InfluxDB
-   * @return Returns Flowable with Strings containing segment statistics
+   * @return Returns Flowable containing either one or none SegmentsImpressions
    */
-  public static Flowable<SegmentsImpression> makeSegmentsImpression(
-          final Logger logger,
-          final MatomoClient client,
-          final Impression impression,
-          final String date,
-          final OffsetDateTime time,
-          // TEST TEST TEST TEST
-          final ConcurrentLinkedQueue<String> cou) {
-
-    final JSONArray resultJson = new JSONArray();
+  public static Flowable<SegmentsImpression> makeSegmentsImpression(final Logger logger, final MatomoClient client,
+                                                                    final Impression impression, final String date,
+                                                                    final OffsetDateTime time) {
+    final JSONArray seed = new JSONArray();
 
     return Flowable.just(impression.getSubtables()).flatMapIterable(imp -> imp)
             .flatMap(subtable -> getSegments(logger, client, subtable, date))
-            .reduce(resultJson, MatomoUtils::combineJsonArrays)
+            .reduce(seed, Utils::combineSegmentJson)
             .toFlowable()
             .flatMap(json -> Flowable.just(new SegmentsImpression(
                     impression.getEpisodeId(), "mh_default", json, time.toInstant())));
@@ -191,14 +132,15 @@ public final class MatomoUtils {
    *
    * @param x The HTTP response we got
    * @param logger Logger for errors
-   * @return An empty <code>Flowable</code> if it's an invalid HTTP response, or a singleton <code>Flowable</code> containing the body as a string
+   * @return An empty <code>Flowable</code> if it's an invalid HTTP response, or a singleton <code>Flowable</code>
+   *         containing the body as a string
    */
   private static Flowable<String> checkResponseCode(final Logger logger, final Response<? extends ResponseBody> x) {
     final boolean correctResponse = x.code() / 200 == 1;
     if (!correctResponse) {
-      logger.error("MATHTTPERROR: code: {}", x.code());
+      logger.error("MATOMOHTTPERROR: code: {}", x.code());
     } else {
-      logger.debug("MATHTTPSUCCESS");
+      logger.debug("MATOMOHTTPSUCCESS");
     }
     return correctResponse ?
             Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string()) :

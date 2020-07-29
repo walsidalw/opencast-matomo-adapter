@@ -107,21 +107,4 @@ public final class MatomoClient {
     return getClient().getResources(idSite, token, date, idSubtable,
             "", "", "", "media_segments");
   }
-
-  /**
-   * Send a HTTP GET request to the Matomo MediaAnalytics.getVideoTitles API. More specifically all 30
-   * second segments for an episode are requested. The expected response is an JSONArray containing
-   * statistical data for each video segment from the specified date.
-   *
-   * @param idSite Site ID from the config file
-   * @param token Auth token for Matomo API from the config file
-   * @param episodeID EpisodeID of the video
-   * @param period Span of days between start Date and now
-   * @return Raw response to the request (JSONArray)
-   */
-  public Flowable<Response<ResponseBody>> getSegmentsRequest(final String idSite, final String token,
-                                                             final String episodeID, final String period) {
-    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoSegments, episodeId: {}", episodeID);
-    return getClient().getSegments(idSite, token, "media_resource%3D@" + episodeID, period);
-  }
 }

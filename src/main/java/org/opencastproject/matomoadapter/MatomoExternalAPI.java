@@ -30,8 +30,9 @@ import retrofit2.http.Query;
 /**
  * Retrofit interface for the external API of Matomo
  */
+@FunctionalInterface
 public interface MatomoExternalAPI {
-  @GET("/?module=API&method=MediaAnalytics.getVideoResources&period=day&format=json&filter_limit=10")
+  @GET("/?module=API&method=MediaAnalytics.getVideoResources&period=day&format=json&filter_limit=-1")
   Flowable<Response<ResponseBody>> getResources(
           @Query("idSite") String idSite,
           @Query("token_auth") String token,
@@ -41,11 +42,4 @@ public interface MatomoExternalAPI {
           @Query("filter_column") String filterCol,
           @Query("showColumns") String showCol,
           @Query("secondaryDimension") String dimension);
-
-  @GET("/?module=API&method=MediaAnalytics.getVideoResources&period=day&format=json&filter_limit=-1&secondaryDimension=media_segments")
-  Flowable<Response<ResponseBody>> getSegments(
-          @Query("idSite") String idSite,
-          @Query("token_auth") String token,
-          @Query("idSubtable") String idSubtable,
-          @Query("date") String date);
 }

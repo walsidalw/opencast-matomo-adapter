@@ -247,7 +247,6 @@ public final class OpencastUtils {
     } else {
       oldList.add(newImpression);
     }
-
     return oldList;
   }
 }

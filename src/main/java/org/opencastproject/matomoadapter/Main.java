@@ -70,9 +70,10 @@ public final class Main {
     // Connect and configure InfluxDB
     try (final InfluxDB influxDB = InfluxDBProcessor.connect(configFile.getInfluxDBConfig())) {
 
-      // Create Matomo and Opencast HTTP clients
+      // Initialize all clients (Opencast, Matomo, InfluxDB)
       final MatomoClient matClient = new MatomoClient(configFile.getMatomoConfig());
       final OpencastClient ocClient = new OpencastClient(configFile.getOpencastConfig());
+      final InfluxDBProcessor influxPro = new InfluxDBProcessor(influxDB, configFile.getInfluxDBConfig());
       // Create a file writer for last date information
       final Writer fileWriter;
       // Check the file with last updated date. If no date is present set to yesterday
@@ -85,12 +86,11 @@ public final class Main {
       // Days between today and the last update
       final int days = (int)ChronoUnit.DAYS.between(lastDate, dateNow);
 
-      getViewStats(matClient, ocClient, influxDB, configFile, days, dateNow);
+      getViewStats(matClient, ocClient, influxPro, days, dateNow);
 
       /*
        * TODO: Save date after every daily run, not after all runs
        */
-
 
       fileWriter = new FileWriter(String.valueOf(p), false);
       fileWriter.write(dateNow.toString());
@@ -112,11 +112,9 @@ public final class Main {
     } catch (final IOException e) {
       e.printStackTrace();
     }
-
     // TEST TEST TEST TEST
     final long end = System.nanoTime();
     System.out.println(end - start);
-
   }
 
   /**
@@ -126,23 +124,20 @@ public final class Main {
    *
    * @param matClient Matomo external API client instance
    * @param ocClient Opencast external API client instance
-   * @param influxDB InfluxDB instance
-   * @param configFile Objects containing all configurations
+   * @param influxPro InfluxDBProcessor instance
    * @param days Number of days between the last update and today
    * @param dateNow Today's date
    */
   private static void getViewStats(final MatomoClient matClient, final OpencastClient ocClient,
-                                   final InfluxDB influxDB, final ConfigFile configFile, final int days,
+                                   final InfluxDBProcessor influxPro, final int days,
                                    final LocalDate dateNow) {
 
     // TEST TEST TEST TEST
     final ArrayList<String> count = new ArrayList<>();
-    final ConcurrentLinkedQueue<String> counter = new ConcurrentLinkedQueue<>();
     final ConcurrentLinkedQueue<String> counter2 = new ConcurrentLinkedQueue<>();
 
-    // Processes all InfluxDB operations
-    final InfluxDBProcessor influxPro = new InfluxDBProcessor(configFile.getInfluxDBConfig());
-    // Used as seed in reduce method, as well as starting point in the second phase
+    // Used as seed in reduce method, as well as starting point in the second phase. After the first phase,
+    // it contains all the unique episode impressions from one day.
     final ArrayList<Impression> seed = new ArrayList<>();
 
     // Execute following steps for each day between the last update and today
@@ -156,49 +151,43 @@ public final class Main {
       // First, get all statistical data for all viewed episodes on given date
       MatomoUtils.getResources(LOGGER, matClient, queryDate)
               // Convert raw JSONObjects to Impressions
-              .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, influxTime, count).subscribeOn(Schedulers.io()))
-              // Filter out / unite duplicates
+              .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, influxTime, count)
+                      .subscribeOn(Schedulers.io()))
+              // Filter out / unite duplicate impressions. Outgoing stream contains unique episode impressions
               .reduce(seed, OpencastUtils::filterImpressions)
               .flattenAsFlowable(impressions -> impressions)
               // Get Points from Impressions
               .flatMap(impression -> Flowable.just(impression).subscribeOn(Schedulers.io()).map(Impression::toPoint))
-              // Add all points to InfluxDB batch, instead of writing each separately
+              // Add all points to InfluxDB batch, instead of writing each point separately
               .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
 
-      influxPro.writeBatchReset(influxDB);
+      // Write view statistics to InfluxDB
+      influxPro.writeBatchReset();
 
-      /*
-       * TODO: New workflow for segments: for each confirmed episode, store every idSubtable within Impression
-       *  Then in the second phase, request stats for each idSubtable and combine them. Finally if data point already
-       *  exists, fetch it and combine new and old --> output a point (write/overwrite)
-       */
-
-      // List of unique Impressions tells us, for which episodes we need to fetch segment data
+      // List of unique impressions tells us, for which episodes we need to fetch segment data
       Flowable.just(seed).flatMapIterable(impressions -> impressions)
               // Request segment statistics and build SegmentsPoints
               .flatMap(impression -> MatomoUtils.makeSegmentsImpression(LOGGER, matClient, impression,
-                      queryDate, influxTime, counter))
-              // If a InfluxDB point for an episode exists, overwrite it. Otherwise,
-              .flatMap(seg -> InfluxDBProcessor.checkSegments(seg, influxDB, configFile.getInfluxDBConfig(), counter2))
+                      queryDate, influxTime).subscribeOn(Schedulers.io()))
+              // If an InfluxDB point for an episode exists, overwrite it. Otherwise, insert point normally
+              .flatMap(seg -> Utils.checkSegments(seg, influxPro)
+                      .subscribeOn(Schedulers.io()))
               .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
 
       // TEST TEST TEST TEST
       System.out.println("Size of cache: " + ocClient.getCache().size());
       System.out.println("Size of filtered list: " + seed.size());
 
-      influxPro.writeBatchReset(influxDB);
-
+      // (Over-)Write segment statistics to InfluxDB
+      influxPro.writeBatchReset();
       // Remove all elements from list for it to be reused
       seed.clear();
 
       // TEST TEST TEST TEST
-      counter.clear();
       counter2.clear();
     }
-
     // TEST TEST TEST TEST
     System.out.println("Saved Opencast requests: " + count.size());
-    System.out.println("Different segments: " + counter.size());
   }
 
   /**

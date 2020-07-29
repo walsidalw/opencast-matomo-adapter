@@ -39,84 +39,36 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import io.reactivex.Flowable;
 
 /**
- * Contains utility functions related to InfluxDB
+ * Handles all processes relevant to InfluxDB
  */
 public final class InfluxDBProcessor {
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
   private BatchPoints batch;
+  private final InfluxDBConfig config;
+  private final InfluxDB influxDB;
   // TEST TEST TEST TEST
   private int count;
 
-  public InfluxDBProcessor(final InfluxDBConfig config) {
+  public InfluxDBProcessor(final InfluxDB influxDB, final InfluxDBConfig config) {
+    this.influxDB = influxDB;
+    this.config = config;
     this.batch = BatchPoints.database(config.getDb()).retentionPolicy(config.getRetentionPolicy()).build();
     this.count = 0;
   }
 
-  /**
-   * Checks, if an entry of segments for an episode already exists in InfluxDB. If it does,
-   * the entry is overwritten, otherwise, an InfluxDB point is created from Segments
-   * object.
-   * Update and delete are not natively supported on point basis by InfluxDB. Therefore, existing
-   * points are overwritten.
-   *
-   * @param seg Segments objects generated from Matomo request
-   * @param influxDB InfluxDB instance
-   * @param config InfluxDB configuration
-   * @return Point from Segments
-   */
-  public static Flowable<Point> checkSegments(final SegmentsImpression seg, final InfluxDB influxDB,
-          final InfluxDBConfig config, final ConcurrentLinkedQueue<String> cou) {
-
-    final String episodeId = seg.getEpisodeId();
-    final String db = config.getDb();
-    final String rp = config.getRetentionPolicy();
-
-    /*String ser;
-
-    // TEST TEST TEST TEST
-    if (episodeId.equals("05d933ea-8ec0-4a49-bdd2-d8dfa009b291")) {
-      episodeId = "724525f2-c44c-41e5-8697-e7c3bf9e1012";
-      ser = "9bced1af-3f86-425a-a16b-8db01d9475ff";
-    } else if (episodeId.equals("093700de-986e-4476-bb15-81dd5667a290")) {
-      episodeId = "8a24880e-7fe9-44c6-8a89-198896338db0";
-      ser = "9bced1af-3f86-425a-a16b-8db01d9475ff";
-    }*/
-
-    final String queryString = String.format("SELECT * FROM %s.%s.segments_daily WHERE episodeId='%s'", db, rp, episodeId);
-
-    // Map the result of the InfluxDB query to a list
-    final InfluxDBMapper mapper = new InfluxDBMapper(influxDB);
-    final List<SegmentsPoint> segmentsPointList = mapper.query(new Query(queryString, db), SegmentsPoint.class);
-
-    // If an entry of segments for this episode exists
-    if (!segmentsPointList.isEmpty()) {
-
-      final JSONArray segJson = seg.getSegments();
-
-      if (segJson.length() == 0)
-        return Flowable.empty();
-
-      final JSONArray combo = MatomoUtils.combineJsonArrays(segJson, segmentsPointList.get(0).getSegments());
-
-      // In order to overwrite an entry, the new one needs to have the same timestamp.
-      // Implication: "new" updates will always be written with the oldest timestamp of the episode
-      final Instant date = segmentsPointList.get(0).getTime();
-
-      // TEST TEST TEST TEST
-      cou.add("te");
-      System.out.println("WIP counter: " + cou.size());
-      return Flowable.just(new SegmentsImpression(seg.getEpisodeId(), seg.getOrganizationId(), combo, date).toPoint());
-    }
-
-    // TEST TEST TEST TEST
-    cou.add("te");
-    System.out.println("WIP counter: " + cou.size());
-
-    // If no point in InfluxDB exists yet, return new point from Segments
-    return Flowable.just(seg.toPoint());
+  public <T> List<T> mapPojo(final String query, final Class<T> clazz) {
+    // Map the result of the InfluxDB query to a list of POJOs
+    final String q = String.format(query, this.config.getDb(), this.config.getRetentionPolicy());
+    final InfluxDBMapper mapper = new InfluxDBMapper(this.influxDB);
+    return mapper.query(new Query(q, this.config.getDb()), clazz);
   }
 
+  /**
+   * Add a point to the batch.
+   *
+   * @param p Point, that needs to be added to the batch.
+   */
   public void addToBatch(final Point p) {
     // TEST TEST TEST TEST TEST
     this.count++;
@@ -124,13 +76,11 @@ public final class InfluxDBProcessor {
   }
 
   /**
-   * Push the whole batch to InfluxDB.
-   *
-   * @param influxDB A connected InfluxDB instance
+   * Push the whole batch to InfluxDB and reset it afterwards.
    */
-  public void writeBatchReset(final InfluxDB influxDB) {
+  public void writeBatchReset() {
     try {
-      final Pong pong = influxDB.ping();
+      final Pong pong = this.influxDB.ping();
       if (!pong.isGood()) {
         LOGGER.error("INFLUXPINGERROR, not good");
       }
@@ -138,15 +88,13 @@ public final class InfluxDBProcessor {
       LOGGER.error("INFLUXPINGERROR, {}", e.getMessage());
     }
 
-    influxDB.write(this.batch);
+    this.influxDB.write(this.batch);
 
     // TEST TEST TEST TEST TEST
     System.out.println("Count of points in batch: " + this.count);
     this.count = 0;
 
-    final String rp = this.batch.getRetentionPolicy();
-    final String db = this.batch.getDatabase();
-    this.batch = BatchPoints.database(db).retentionPolicy(rp).build();
+    this.batch = BatchPoints.database(this.config.getDb()).retentionPolicy(this.config.getRetentionPolicy()).build();
   }
 
   /**

@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
  */
 @SuppressWarnings("InstanceVariableMayNotBeInitialized")
 @Measurement(name = "segments_daily", timeUnit = TimeUnit.SECONDS)
-public class SegmentsPoint {
+public class SegmentsPOJO {
 
   @Column(name = "time")
   private Instant time;
