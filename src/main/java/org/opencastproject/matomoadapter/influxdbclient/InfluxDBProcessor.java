@@ -19,7 +19,7 @@
  *
  */
 
-package org.opencastproject.matomoadapter;
+package org.opencastproject.matomoadapter.influxdbclient;
 
 import org.influxdb.InfluxDB;
 import org.influxdb.InfluxDBFactory;
@@ -29,14 +29,13 @@ import org.influxdb.dto.Point;
 import org.influxdb.dto.Pong;
 import org.influxdb.dto.Query;
 import org.influxdb.impl.InfluxDBMapper;
-import org.slf4j.LoggerFactory;
 import java.util.List;
 
 /**
  * Handles all processes relevant to InfluxDB
  */
 public final class InfluxDBProcessor {
-  private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Main.class);
+  private final org.slf4j.Logger logger;
 
   private BatchPoints batch;
   private final InfluxDBConfig config;
@@ -44,7 +43,8 @@ public final class InfluxDBProcessor {
   // TEST TEST TEST TEST
   private int count;
 
-  public InfluxDBProcessor(final InfluxDBConfig config) {
+  public InfluxDBProcessor(final InfluxDBConfig config, final org.slf4j.Logger logger) {
+    this.logger = logger;
     this.influxDB = connect(config);
     this.config = config;
     this.batch = BatchPoints.database(config.getDb()).retentionPolicy(config.getRetentionPolicy()).build();
@@ -82,10 +82,10 @@ public final class InfluxDBProcessor {
     try {
       final Pong pong = this.influxDB.ping();
       if (!pong.isGood()) {
-        LOGGER.error("INFLUXPINGERROR, not good");
+        this.logger.error("INFLUXPINGERROR, not good");
       }
     } catch (final InfluxDBIOException e) {
-      LOGGER.error("INFLUXPINGERROR, {}", e.getMessage());
+      this.logger.error("INFLUXPINGERROR, {}", e.getMessage());
     }
 
     this.influxDB.write(this.batch);
@@ -113,12 +113,8 @@ public final class InfluxDBProcessor {
       influxDB.enableBatch();
       if (config.getLogLevel().equals("debug")) {
         influxDB.setLogLevel(InfluxDB.LogLevel.FULL);
-      } else if (config.getLogLevel().equals("info")) {
-        influxDB.setLogLevel(InfluxDB.LogLevel.BASIC);
       } else {
-        LOGGER.error(
-                "Invalid InfluxDB log level \"" + config.getLogLevel() + "\": available are \"debug\" and \"info\"");
-        System.exit(ExitStatuses.INVALID_INFLUXDB_CONFIG);
+        influxDB.setLogLevel(InfluxDB.LogLevel.BASIC);
       }
       return influxDB;
     } catch (final Exception e) {

@@ -21,10 +21,16 @@
 
 package org.opencastproject.matomoadapter;
 
+import org.opencastproject.matomoadapter.influxdbclient.InfluxDBProcessor;
+import org.opencastproject.matomoadapter.matclient.MatomoClient;
+import org.opencastproject.matomoadapter.matclient.MatomoUtils;
+import org.opencastproject.matomoadapter.influxdbclient.ViewImpression;
+import org.opencastproject.matomoadapter.occlient.OpencastClient;
+import org.opencastproject.matomoadapter.occlient.OpencastUtils;
+
 import org.influxdb.InfluxDBIOException;
 import org.slf4j.LoggerFactory;
 
-import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
@@ -62,10 +68,10 @@ public final class Main {
 
     try {
       // Initialize all clients (Opencast, Matomo)
-      final MatomoClient matClient = new MatomoClient(configFile.getMatomoConfig());
-      final OpencastClient ocClient = new OpencastClient(configFile.getOpencastConfig());
+      final MatomoClient matClient = new MatomoClient(configFile.getMatomoConfig(), LOGGER);
+      final OpencastClient ocClient = new OpencastClient(configFile.getOpencastConfig(), LOGGER);
       // Connect and configure InfluxDB
-      final InfluxDBProcessor influxPro = new InfluxDBProcessor(configFile.getInfluxDBConfig());
+      final InfluxDBProcessor influxPro = new InfluxDBProcessor(configFile.getInfluxDBConfig(), LOGGER);
 
       // Schedule a task for updates
       final TimerTask scheduledTask = new TimerTask() {
@@ -80,12 +86,9 @@ public final class Main {
       final long period = 1000L * 60L * 60L * 24L * configFile.getInterval();
       timer.scheduleAtFixedRate(scheduledTask, delay, period);
 
-    } catch (final MatomoClientConfigurationException e) {
-      LOGGER.error("Matomo configuration error: ", e);
-      System.exit(ExitStatuses.MATOMO_CLIENT_CONFIGURATION_ERROR);
-    } catch (final OpencastClientConfigurationException e) {
-      LOGGER.error("Opencast configuration error: ", e);
-      System.exit(ExitStatuses.OPENCAST_CLIENT_CONFIGURATION_ERROR);
+    } catch (final ClientConfigurationException e) {
+      LOGGER.error("Client configuration error: ", e);
+      System.exit(ExitStatuses.CLIENT_CONFIGURATION_ERROR);
     } catch (final InfluxDBIOException e) {
       if (e.getCause() != null) {
         LOGGER.error("InfluxDB error: " + e.getCause().getMessage());
@@ -106,8 +109,7 @@ public final class Main {
    * @param p Path to file containing the last update date
    */
   private static void getStatisticsDaily(final MatomoClient matClient, final OpencastClient ocClient,
-          final InfluxDBProcessor influxPro, final Path p) {
-
+                                         final InfluxDBProcessor influxPro, final Path p) {
     // TEST TEST TEST TEST
     final long start = System.nanoTime();
 
@@ -124,11 +126,9 @@ public final class Main {
       // Execute following steps for each day between the last update and today
       for (int i = days; i > 0; i--) {
         // Used as timestamp for InfluxDB points
-        final OffsetDateTime influxTime = OffsetDateTime.now().minusDays(i);
-        // Needed for Matomo external API calls
-        final String queryDate = dateNow.minusDays(i).toString();
+        final OffsetDateTime date = OffsetDateTime.now().minusDays(i);
         // Get statistics for current date (queryDate)
-        getStatistics(matClient, ocClient, influxPro, queryDate, influxTime);
+        getStatistics(matClient, ocClient, influxPro, date);
         // Write current date into file
         final Writer fileWriter = new FileWriter(String.valueOf(p), false);
         fileWriter.write(dateNow.minusDays(i-1).toString());
@@ -152,28 +152,26 @@ public final class Main {
    * @param matClient Matomo external API client instance
    * @param ocClient Opencast external API client instance
    * @param influxPro InfluxDBProcessor instance
-   * @param queryDate Date for the requests
-   * @param influxTime Date for InfluxDB timestamps
+   * @param date Date for the requests
    */
   private static void getStatistics(final MatomoClient matClient, final OpencastClient ocClient,
-                                    final InfluxDBProcessor influxPro,
-                                    final String queryDate, final OffsetDateTime influxTime) {
+                                    final InfluxDBProcessor influxPro, final OffsetDateTime date) {
 
     // Used as seed in reduce method, as well as starting point in the second phase. After the first phase,
     // it contains all the unique episode impressions from one day.
-    final ArrayList<Impression> seed = new ArrayList<>();
+    final ArrayList<ViewImpression> seed = new ArrayList<>();
 
     // First, get all statistical data for all viewed episodes on given date
-    MatomoUtils.getResources(LOGGER, matClient, queryDate)
+    MatomoUtils.getViewed(matClient, date)
             // Convert raw JSONObjects to Impressions
-            .flatMap(json -> OpencastUtils.makeImpression(LOGGER, ocClient, json, influxTime)
+            .flatMap(json -> OpencastUtils.makeImpression(ocClient, json, date)
                     .subscribeOn(Schedulers.io()))
             // Filter out / unite duplicate impressions. Outgoing stream contains unique episode impressions
             .reduce(seed, OpencastUtils::filterImpressions)
             .flattenAsFlowable(impressions -> impressions)
             // Get Points from Impressions
-            .flatMap(impression -> Flowable.just(impression)
-                    .subscribeOn(Schedulers.io()).map(Impression::toPoint))
+            .flatMap(viewImpression -> Flowable.just(viewImpression)
+                    .subscribeOn(Schedulers.io()).map(ViewImpression::toPoint))
             // Add all points to InfluxDB batch, instead of writing each point separately
             .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
 
@@ -183,8 +181,8 @@ public final class Main {
     // List of unique impressions tells us, for which episodes we need to fetch segment data
     Flowable.just(seed).flatMapIterable(impressions -> impressions)
             // Request segment statistics and build SegmentsPoints
-            .flatMap(impression -> MatomoUtils.makeSegmentsImpression(LOGGER, matClient, impression,
-                    queryDate, influxTime).subscribeOn(Schedulers.io()))
+            .flatMap(viewImpression -> MatomoUtils.makeSegmentsImpression(matClient, viewImpression, date)
+                    .subscribeOn(Schedulers.io()))
             // If an InfluxDB point for an episode exists, overwrite it. Otherwise, insert point normally
             .flatMap(seg -> Utils.checkSegments(seg, influxPro)
                     .subscribeOn(Schedulers.io()))
@@ -194,7 +192,6 @@ public final class Main {
     influxPro.writeBatchReset();
 
     // TEST TEST TEST TEST
-    System.out.println("Size of cache: " + ocClient.getCache().size());
     System.out.println("Size of filtered list: " + seed.size());
   }
 
@@ -204,18 +201,12 @@ public final class Main {
    * @param e The error to analyze
    */
   private static void processError(final Throwable e) {
-    if (e instanceof FileNotFoundException) {
-      LOGGER.error("Log file \"" + e.getMessage() + "\" not found", e);
-      System.exit(ExitStatuses.LOG_FILE_NOT_FOUND);
-    } else if (e instanceof ParsingJsonSyntaxException) {
+    if (e instanceof ParsingJsonSyntaxException) {
       LOGGER.error("Couldn't parse json: " + ((ParsingJsonSyntaxException) e).getJson(), e);
       System.exit(ExitStatuses.JSON_SYNTAX_ERROR);
-    } else if (e instanceof OpencastClientConfigurationException) {
-      LOGGER.error("Opencast configuration error:", e);
-      System.exit(ExitStatuses.OPENCAST_CLIENT_CONFIGURATION_ERROR);
-    } else if (e instanceof MatomoClientConfigurationException) {
-      LOGGER.error("Matomo configuration error:", e);
-      System.exit(ExitStatuses.MATOMO_CLIENT_CONFIGURATION_ERROR);
+    } else if (e instanceof ClientConfigurationException) {
+      LOGGER.error("Client configuration error:", e);
+      System.exit(ExitStatuses.CLIENT_CONFIGURATION_ERROR);
     }else {
       LOGGER.error("Error:", e);
     }

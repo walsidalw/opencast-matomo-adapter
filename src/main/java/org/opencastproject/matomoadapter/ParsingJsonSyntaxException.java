@@ -27,12 +27,10 @@ package org.opencastproject.matomoadapter;
 public final class ParsingJsonSyntaxException extends RuntimeException {
   private final String json;
 
-  ParsingJsonSyntaxException(final String json) {
+  public ParsingJsonSyntaxException(final String json) {
     super("error parsing json");
     this.json = json;
   }
 
-  public String getJson() {
-    return this.json;
-  }
+  public String getJson() { return this.json; }
 }

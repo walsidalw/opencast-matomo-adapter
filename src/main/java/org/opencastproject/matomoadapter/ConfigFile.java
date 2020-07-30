@@ -21,6 +21,10 @@
 
 package org.opencastproject.matomoadapter;
 
+import org.opencastproject.matomoadapter.influxdbclient.InfluxDBConfig;
+import org.opencastproject.matomoadapter.matclient.MatomoConfig;
+import org.opencastproject.matomoadapter.occlient.OpencastConfig;
+
 import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
@@ -57,6 +61,7 @@ public final class ConfigFile {
   private static final String OPENCAST_URI = "opencast.external-api.uri";
   private static final String OPENCAST_USER = "opencast.external-api.user";
   private static final String OPENCAST_PASSWORD = "opencast.external-api.password";
+  private static final String OPENCAST_ORGAID = "opencast.organizationid";
   private static final String OPENCAST_CACHE_SIZE = "opencast.external-api.max-cache-size";
   private static final String OPENCAST_EXPIRATION_DURATION = "opencast.external-api.cache-expiration-duration";
   private static final String OPENCAST_RATE = "opencast.rate-limit";
@@ -156,6 +161,7 @@ public final class ConfigFile {
     final String opencastHost = parsed.getProperty(OPENCAST_URI);
     final String opencastUser = parsed.getProperty(OPENCAST_USER);
     final String opencastPassword = parsed.getProperty(OPENCAST_PASSWORD);
+    final String opencastOrgaId = parsed.getProperty(OPENCAST_ORGAID, "mh_default_org");
 
     Duration opencastCacheExpirationDuration = Duration.ZERO;
     try {
@@ -179,7 +185,7 @@ public final class ConfigFile {
 
     // Create new Opencast config object
     return opencastHost != null && opencastUser != null && opencastPassword != null ?
-            new OpencastConfig(opencastHost, opencastUser, opencastPassword,
+            new OpencastConfig(opencastHost, opencastUser, opencastPassword, opencastOrgaId,
                     opencastCacheSize, opencastCacheExpirationDuration, opencastRateLimit, opencastTimeout) :
             null;
   }
@@ -215,7 +221,6 @@ public final class ConfigFile {
    */
   private static InfluxDBConfig initInfluxDB(final Properties parsed, final Path p) {
     final String influxDbUser = parsed.getProperty(INFLUXDB_USER);
-
     if (influxDbUser.isEmpty()) {
       LOGGER.error("Error parsing config file \"{}\": {} cannot be empty", p, INFLUXDB_USER);
       System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
@@ -224,6 +229,12 @@ public final class ConfigFile {
     if (influxDbDbName.isEmpty()) {
       LOGGER.error("Error parsing config file \"{}\": {} cannot be empty", p, INFLUXDB_DB_NAME);
       System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
+    }
+    final String influxDbLogLevel = parsed.getProperty(INFLUXDB_LOG_LEVEL, "info");
+    if (influxDbLogLevel.isEmpty() || !(influxDbLogLevel.equals("info") || influxDbLogLevel.equals("debug"))) {
+      LOGGER.error(
+              "Invalid InfluxDB log level \"" + influxDbLogLevel + "\": available are \"debug\" and \"info\"");
+      System.exit(ExitStatuses.INVALID_INFLUXDB_CONFIG);
     }
 
     return new InfluxDBConfig(parsed.getProperty(INFLUXDB_URI),
@@ -238,9 +249,7 @@ public final class ConfigFile {
     return this.influxDBConfig;
   }
 
-  public MatomoConfig getMatomoConfig() {
-    return this.matomoConfig;
-  }
+  public MatomoConfig getMatomoConfig() { return this.matomoConfig; }
 
   public OpencastConfig getOpencastConfig() { return this.opencastConfig; }
 

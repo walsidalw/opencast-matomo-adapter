@@ -19,36 +19,44 @@
  *
  */
 
-package org.opencastproject.matomoadapter;
+package org.opencastproject.matomoadapter.occlient;
+
+import java.time.Duration;
 
 /**
- * Represents all InfluxDB related configuration parameters (immutable)
+ * Represents all fields for Opencast's External API configuration (immutable)
  */
-public final class InfluxDBConfig {
-  private final String host;
+public final class OpencastConfig {
+  private final String uri;
   private final String user;
   private final String password;
-  private final String db;
-  private final String retentionPolicy;
-  private final String logLevel;
+  private final String orgaId;
+  private final int cacheSize;
+  private final Duration cacheDuration;
+  private final int rate;
+  private final int timeout;
 
-  public InfluxDBConfig(
-          final String host,
+  public OpencastConfig(
+          final String uri,
           final String user,
           final String password,
-          final String db,
-          final String retentionPolicy,
-          final String logLevel) {
-    this.host = host;
+          final String orgaId,
+          final int cacheSize,
+          final Duration cacheDuration,
+          final int rate,
+          final int timeout) {
+    this.uri = uri;
     this.user = user;
     this.password = password;
-    this.db = db;
-    this.retentionPolicy = retentionPolicy;
-    this.logLevel = logLevel;
+    this.orgaId = orgaId;
+    this.cacheSize = cacheSize;
+    this.cacheDuration = cacheDuration;
+    this.rate = rate;
+    this.timeout = timeout;
   }
 
-  public String getHost() {
-    return this.host;
+  public String getUri() {
+    return this.uri;
   }
 
   public String getUser() {
@@ -59,13 +67,17 @@ public final class InfluxDBConfig {
     return this.password;
   }
 
-  public String getDb() {
-    return this.db;
+  public String getOrgaId() { return this.orgaId; }
+
+  public int getCacheSize() {
+    return this.cacheSize;
   }
 
-  public String getRetentionPolicy() { return this.retentionPolicy; }
-
-  public String getLogLevel() {
-    return this.logLevel;
+  public Duration getCacheDuration() {
+    return this.cacheDuration;
   }
+
+  public int getRate() { return this.rate; }
+
+  public int getTimeout() { return this.timeout; }
 }

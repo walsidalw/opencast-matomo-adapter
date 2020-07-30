@@ -19,7 +19,7 @@
  *
  */
 
-package org.opencastproject.matomoadapter;
+package org.opencastproject.matomoadapter.matclient;
 
 import io.reactivex.Flowable;
 import okhttp3.ResponseBody;

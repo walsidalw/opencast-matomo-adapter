@@ -19,39 +19,39 @@
  *
  */
 
-package org.opencastproject.matomoadapter;
+package org.opencastproject.matomoadapter.influxdbclient;
 
 import org.influxdb.dto.Point;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
+import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 
 /**
  * An Impression is an object containing all necessary metadata to write to the InfluxDB (immutable)
  */
-public final class Impression {
-  private final String episodeId;
-  private final String organizationId;
+public final class ViewImpression {
+  private final String eventId;
+  private final String orgaId;
   private final String seriesId;
   private final int plays;
   private final int visitors;
   private final int finishes;
-  private final OffsetDateTime date;
+  private final Instant date;
   private final ArrayList<String> idSubtables;
 
-  public Impression(
-          final String episodeId,
-          final String organizationId,
+  public ViewImpression(
+          final String eventId,
+          final String orgaId,
           final String seriesId,
           final int plays,
           final int visitors,
           final int finishes,
-          final OffsetDateTime date,
+          final Instant date,
           final ArrayList<String> idSubtables) {
-    this.episodeId = episodeId;
-    this.organizationId = organizationId;
+    this.eventId = eventId;
+    this.orgaId = orgaId;
     this.seriesId = seriesId;
     this.plays = plays;
     this.visitors = visitors;
@@ -67,13 +67,13 @@ public final class Impression {
   public Point toPoint() {
     return Point
             .measurement("impressions_daily")
-            .time(this.date.toInstant().getEpochSecond(), TimeUnit.SECONDS)
+            .time(this.date.getEpochSecond(), TimeUnit.SECONDS)
             .addField("plays", this.plays)
             .addField("visitors", this.visitors)
             .addField("finishes", this.finishes)
             .tag("seriesId", this.seriesId)
-            .tag("organizationId", this.organizationId)
-            .tag("episodeId", this.episodeId)
+            .tag("organizationId", this.orgaId)
+            .tag("eventId", this.eventId)
             .build();
   }
 
@@ -83,18 +83,18 @@ public final class Impression {
       return true;
     if (o == null || getClass() != o.getClass())
       return false;
-    final Impression impression = (Impression) o;
-    return this.organizationId.equals(impression.organizationId) && this.episodeId.equals(impression.episodeId);
+    final ViewImpression viewImpression = (ViewImpression) o;
+    return this.orgaId.equals(viewImpression.orgaId) && this.eventId.equals(viewImpression.eventId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(this.organizationId, this.episodeId);
+    return Objects.hash(this.orgaId, this.eventId);
   }
 
-  public String getEpisodeId() { return this.episodeId; }
+  public String getEventId() { return this.eventId; }
 
-  public String getOrganizationId() { return this.organizationId; }
+  public String getOrgaId() { return this.orgaId; }
 
   public String getSeriesId() { return this.seriesId; }
 
@@ -104,7 +104,7 @@ public final class Impression {
 
   public int getFinishes() { return this.finishes; }
 
-  public OffsetDateTime getDate() { return this.date; }
+  public Instant getDate() { return this.date; }
 
   public ArrayList<String> getSubtables() { return this.idSubtables; }
 }

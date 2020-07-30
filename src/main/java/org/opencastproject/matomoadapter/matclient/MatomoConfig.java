@@ -19,35 +19,27 @@
  *
  */
 
-package org.opencastproject.matomoadapter;
-
-import java.time.Duration;
+package org.opencastproject.matomoadapter.matclient;
 
 /**
- * Represents all fields for Opencast's External API configuration (immutable)
+ * Represents all fields for Matomo's External API configuration (immutable)
  */
-public final class OpencastConfig {
+public final class MatomoConfig {
   private final String uri;
-  private final String user;
-  private final String password;
-  private final int cacheSize;
-  private final Duration cacheDuration;
+  private final String siteId;
+  private final String token;
   private final int rate;
   private final int timeout;
 
-  public OpencastConfig(
+  public MatomoConfig(
           final String uri,
-          final String user,
-          final String password,
-          final int cacheSize,
-          final Duration cacheDuration,
+          final String siteId,
+          final String token,
           final int rate,
           final int timeout) {
     this.uri = uri;
-    this.user = user;
-    this.password = password;
-    this.cacheSize = cacheSize;
-    this.cacheDuration = cacheDuration;
+    this.siteId = siteId;
+    this.token = token;
     this.rate = rate;
     this.timeout = timeout;
   }
@@ -56,23 +48,17 @@ public final class OpencastConfig {
     return this.uri;
   }
 
-  public String getUser() {
-    return this.user;
+  public String getSiteId() {
+    return this.siteId;
   }
 
-  public String getPassword() {
-    return this.password;
+  public String getToken() {
+    return this.token;
   }
 
-  public int getCacheSize() {
-    return this.cacheSize;
+  public int getRate() {
+    return this.rate;
   }
-
-  public Duration getCacheDuration() {
-    return this.cacheDuration;
-  }
-
-  public int getRate() { return this.rate; }
 
   public int getTimeout() { return this.timeout; }
 }

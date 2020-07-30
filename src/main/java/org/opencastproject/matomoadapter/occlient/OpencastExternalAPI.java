@@ -19,13 +19,22 @@
  *
  */
 
-package org.opencastproject.matomoadapter;
+package org.opencastproject.matomoadapter.occlient;
+
+import io.reactivex.Flowable;
+import okhttp3.ResponseBody;
+import retrofit2.Response;
+import retrofit2.http.GET;
+import retrofit2.http.Header;
+import retrofit2.http.Path;
 
 /**
- * Represents an invalid HTTP response from the Opencast instance
+ * Retrofit interface for the external Opencast API
  */
-public class InvalidOpencastResponse extends RuntimeException {
-  public InvalidOpencastResponse(final int code) {
-    super("Opencast returned HTTP " + code);
-  }
+@SuppressWarnings("InterfaceMayBeAnnotatedFunctional")
+public interface OpencastExternalAPI {
+  @GET("/api/events/{eventId}")
+  Flowable<Response<ResponseBody>> getEvent(
+          @Path("eventId") String eventId,
+          @Header("Authorization") String authorization);
 }

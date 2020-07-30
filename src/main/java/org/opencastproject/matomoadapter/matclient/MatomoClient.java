@@ -19,9 +19,12 @@
  *
  */
 
-package org.opencastproject.matomoadapter;
+package org.opencastproject.matomoadapter.matclient;
 
-import org.slf4j.LoggerFactory;
+import org.opencastproject.matomoadapter.ClientConfigurationException;
+import org.opencastproject.matomoadapter.LimitInterceptor;
+
+import org.slf4j.Logger;
 
 import java.util.concurrent.TimeUnit;
 
@@ -38,22 +41,23 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
  * Manages Opencast's External API endpoint
  */
 public final class MatomoClient {
-  private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(MatomoClient.class);
-
   // Filter pattern for view statistics requests. Filters out episodes with 0 views.
   private static final String FILTER_PATTERN = "^[1-9]\\d*$";
   // Filter out unnecessary columns to shave of some weight from responses
   private static final String SHOW_COL = "label,nb_plays,nb_unique_visitors_impressions,nb_finishes";
 
+  private final Logger logger;
   private final MatomoConfig matomoConfig;
-  private final OkHttpClient client;
+  private final OkHttpClient httpClient;
+  private final MatomoExternalAPI apiClient;
 
   /**
    * Create the client.
    *
    * @param matomoConfig Matomo configuration
    */
-  public MatomoClient(final MatomoConfig matomoConfig) {
+  public MatomoClient(final MatomoConfig matomoConfig, final Logger logger) {
+    this.logger = logger;
     this.matomoConfig = matomoConfig;
     // Initialize HTTP client for Matomo network requests
     final Interceptor interceptor = new HttpLoggingInterceptor();
@@ -64,9 +68,10 @@ public final class MatomoClient {
             .readTimeout(matomoConfig.getTimeout(), TimeUnit.SECONDS)
             .writeTimeout(matomoConfig.getTimeout(), TimeUnit.SECONDS);
     // Add rate limiter in case network traffic needs to be throttled
-    this.client = matomoConfig.getRate() != 0 ?
+    this.httpClient = matomoConfig.getRate() != 0 ?
             b.addInterceptor(new LimitInterceptor(matomoConfig.getRate())).build() :
             b.build();
+    this.apiClient = getClient();
   }
 
   /**
@@ -75,12 +80,16 @@ public final class MatomoClient {
    * @return A retrofit interface to be used to make HTTP calls
    */
   private MatomoExternalAPI getClient() {
-    final Retrofit retrofit = new Retrofit.Builder()
-            .baseUrl(this.matomoConfig.getUri())
-            .client(this.client)
-            .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
-            .build();
-    return retrofit.create(MatomoExternalAPI.class);
+    try {
+      final Retrofit retrofit = new Retrofit.Builder()
+              .baseUrl(this.matomoConfig.getUri())
+              .client(this.httpClient)
+              .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
+              .build();
+      return retrofit.create(MatomoExternalAPI.class);
+    } catch (final IllegalArgumentException e) {
+    throw new ClientConfigurationException("Error in Matomo configuration: " + e.getMessage());
+    }
   }
 
   /**
@@ -94,19 +103,23 @@ public final class MatomoClient {
    * @param idSubtable Unique identifier of a resource on given date. If null, return all viewed episodes
    * @return Raw response to the request (JSONArray/String)
    */
-  public Flowable<Response<ResponseBody>> getResourcesRequest(final String date, final String idSubtable) {
+  Flowable<Response<ResponseBody>> getResourcesRequest(final String date, final String idSubtable,
+                                                       final String dimension) {
     final String idSite = this.matomoConfig.getSiteId();
     final String token = this.matomoConfig.getToken();
 
     // If no idSubtable was passed, it is assumed, that a list of all played episodes is requested
     if(idSubtable == null) {
-      LOGGER.debug("MATOMOREQUESTSTART, method: getVideoResources, date: {}", date);
-      return getClient().getResources(idSite, token, date, "1",
+      this.logger.debug("MATOMOREQUESTSTART, method: getVideoResources, date: {}", date);
+      return this.apiClient.getResources(idSite, token, date, "1",
               FILTER_PATTERN, "nb_plays", SHOW_COL, "");
     }
-    // Otherwise, request video segments information for given date and idSubtable
-    LOGGER.debug("MATOMOREQUESTSTART, method: getVideoSegments, date: {}, idSubtable: {}", date, idSubtable);
-    return getClient().getResources(idSite, token, date, idSubtable,
-            "", "", "", "media_segments");
+    // Otherwise, request video statistics with given dimension, date and idSubtable
+    this.logger.debug("MATOMOREQUESTSTART, method: getVideoResources ({}), date: {}, idSubtable: {}",
+            dimension, date, idSubtable);
+    return this.apiClient.getResources(idSite, token, date, idSubtable,
+            "", "", "", dimension);
   }
+
+  Logger getLogger() { return this.logger; }
 }

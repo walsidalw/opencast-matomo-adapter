@@ -1,4 +1,4 @@
-package org.opencastproject.matomoadapter;
+package org.opencastproject.matomoadapter.influxdbclient;
 
 import org.influxdb.annotation.Column;
 import org.influxdb.annotation.Measurement;
@@ -16,11 +16,11 @@ public class SegmentsPOJO {
   @Column(name = "time")
   private Instant time;
 
+  @Column(name = "eventId", tag = true)
+  private String eventId;
+
   @Column(name = "organizationId", tag = true)
   private String organizationId;
-
-  @Column(name = "episodeId", tag = true)
-  private String episodeId;
 
   @Column(name = "segments")
   private String segments;

@@ -21,20 +21,9 @@
 
 package org.opencastproject.matomoadapter;
 
-import io.reactivex.Flowable;
-import okhttp3.ResponseBody;
-import retrofit2.Response;
-import retrofit2.http.GET;
-import retrofit2.http.Header;
-import retrofit2.http.Path;
-
 /**
- * Retrofit interface for the external Opencast API
+ * Indicates an error while creating a client interface
  */
-@SuppressWarnings("InterfaceMayBeAnnotatedFunctional")
-public interface OpencastExternalAPI {
-  @GET("/api/events/{eventId}")
-  Flowable<Response<ResponseBody>> getEvent(
-          @Path("eventId") String eventId,
-          @Header("Authorization") String authorization);
+public final class ClientConfigurationException extends RuntimeException {
+  public ClientConfigurationException(final String message) { super(message); }
 }

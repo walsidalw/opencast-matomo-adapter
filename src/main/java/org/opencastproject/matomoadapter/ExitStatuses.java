@@ -33,49 +33,33 @@ public final class ExitStatuses {
    */
   public static final int INVALID_INFLUXDB_CONFIG = 2;
   /**
-   * Error batch-reading the given log file
-   */
-  public static final int LOG_FILE_BATCH_READ_ERROR = 3;
-  /**
    * There was an error configuring one (maybe the only) Opencast client
    */
-  public static final int MATOMO_CLIENT_CONFIGURATION_ERROR = 4;
-  /**
-   * There was an error configuring one (maybe the only) Opencast client
-   */
-  public static final int OPENCAST_CLIENT_CONFIGURATION_ERROR = 5;
+  public static final int CLIENT_CONFIGURATION_ERROR = 3;
   /**
    * InfluxDB raised a run-time error (connection lost, or something)
    */
-  public static final int INFLUXDB_RUNTIME_ERROR = 5;
-  /**
-   * A log configuration file was given, but contained an error
-   */
-  public static final int LOG_FILE_CONFIGURATION_ERROR = 6;
-  /**
-   * The log file to analyze wasn't found
-   */
-  public static final int LOG_FILE_NOT_FOUND = 7;
+  public static final int INFLUXDB_RUNTIME_ERROR = 4;
   /**
    * The JSON file returned by the external API wasn't valid
    */
-  public static final int JSON_SYNTAX_ERROR = 8;
+  public static final int JSON_SYNTAX_ERROR = 5;
   /**
    * Some random exception flew by us
    */
-  public static final int UNKNOWN = 9;
+  public static final int UNKNOWN = 6;
   /**
    * The configuration file given was not found
    */
-  public static final int CONFIG_FILE_NOT_FOUND = 10;
+  public static final int CONFIG_FILE_NOT_FOUND = 7;
   /**
    * There was some syntax error with the configuration file given
    */
-  public static final int CONFIG_FILE_PARSE_ERROR = 11;
+  public static final int CONFIG_FILE_PARSE_ERROR = 8;
   /**
    * There was an error with file reading/writing
    */
-  public static final int FILE_HANDLING_ERROR = 12;
+  public static final int FILE_HANDLING_ERROR = 9;
 
   private ExitStatuses() {
   }

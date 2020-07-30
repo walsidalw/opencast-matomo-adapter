@@ -19,7 +19,13 @@
  *
  */
 
-package org.opencastproject.matomoadapter;
+package org.opencastproject.matomoadapter.matclient;
+
+import org.opencastproject.matomoadapter.InvalidHttpResponseException;
+import org.opencastproject.matomoadapter.ParsingJsonSyntaxException;
+import org.opencastproject.matomoadapter.Utils;
+import org.opencastproject.matomoadapter.influxdbclient.ViewImpression;
+import org.opencastproject.matomoadapter.influxdbclient.SegmentsImpression;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -48,7 +54,7 @@ public final class MatomoUtils {
    * @param json Response body from Matomo API request
    * @return ArrayList with separate JSONObjects containing statistics for each episode
    */
-  private static ArrayList<JSONObject> getResourcesJson(final String json) {
+  private static ArrayList<JSONObject> getViewedJson(final String json) {
     try {
       final JSONArray jArray = new JSONArray(json);
       final ArrayList<JSONObject> list = new ArrayList<>();
@@ -66,38 +72,39 @@ public final class MatomoUtils {
   /**
    * Invoke a request to the Matomo MediaAnalytics.getVideoResources API for view statistics.
    *
-   * @param logger Logger for info/error logging
    * @param client Matomo client instance
    * @param date Date of request
    * @return Returns Flowable with JSONObjects containing episode statistics
    */
-  public static Flowable<JSONObject> getResources(final Logger logger, final MatomoClient client,
-                                                  final String date) {
-    logger.info("Retrieving resources for date: {}", date);
+  public static Flowable<JSONObject> getViewed(final MatomoClient client, final OffsetDateTime date) {
+    final Logger logger = client.getLogger();
+    final String reqDate = date.toLocalDate().toString();
+    logger.info("Retrieving resources for date: {}", reqDate);
 
     return client
-            .getResourcesRequest(date, null)
+            .getResourcesRequest(reqDate, null, null)
             .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
-            .map(MatomoUtils::getResourcesJson)
+            .map(MatomoUtils::getViewedJson)
             .flatMapIterable(json -> json);
   }
 
   /**
    * Invoke a request to the Matomo MediaAnalytics.getVideoResources API
-   * for media segments and filter out empty responses.
+   * for given dimension and filter out empty responses.
    *
    * @param logger Logger for info/error logging
    * @param client Matomo client instance
    * @param idSubtable Unique identifier for a player-episode pair on given date
    * @param date Date of request
+   * @param dimension Secondary dimension for request
    * @return Returns Flowable with Strings containing segment statistics
    */
-  private static Flowable<String> getSegments(final Logger logger, final MatomoClient client,
-                                              final String idSubtable, final String date) {
-    logger.info("Retrieving segments for date: {}, idSubtable: {}", date, idSubtable);
+  private static Flowable<String> getDetails(final Logger logger, final MatomoClient client,
+                                             final String idSubtable, final String date, final String dimension) {
+    logger.info("Retrieving {} for date: {}, idSubtable: {}", dimension, date, idSubtable);
 
     return client
-            .getResourcesRequest(date, idSubtable)
+            .getResourcesRequest(date, idSubtable, dimension)
             .concatMap(body -> MatomoUtils.checkResponseCode(logger, body))
             // Filter out all empty responses
             .filter(x -> x.length() > 2);
@@ -107,24 +114,24 @@ public final class MatomoUtils {
    * Prompts an API call and converts the response to a SegmentsImpression. If no segment data is
    * available for the given impression/episode, empty Flowable is returned.
    *
-   * @param logger Logger for info/error logging
    * @param client Matomo client instance
-   * @param impression Contains all necessary episode information
+   * @param viewImpression Contains all necessary episode information
    * @param date Date of request
-   * @param time Timestamp for InfluxDB
    * @return Returns Flowable containing either one or none SegmentsImpressions
    */
-  public static Flowable<SegmentsImpression> makeSegmentsImpression(final Logger logger, final MatomoClient client,
-                                                                    final Impression impression, final String date,
-                                                                    final OffsetDateTime time) {
+  public static Flowable<SegmentsImpression> makeSegmentsImpression(final MatomoClient client,
+                                                                    final ViewImpression viewImpression,
+                                                                    final OffsetDateTime date) {
+    final Logger logger = client.getLogger();
     final JSONArray seed = new JSONArray();
+    final String reqDate = date.toLocalDate().toString();
 
-    return Flowable.just(impression.getSubtables()).flatMapIterable(imp -> imp)
-            .flatMap(subtable -> getSegments(logger, client, subtable, date))
+    return Flowable.just(viewImpression.getSubtables()).flatMapIterable(imp -> imp)
+            .flatMap(subtable -> getDetails(logger, client, subtable, reqDate, "media_segments"))
             .reduce(seed, Utils::combineSegmentJson)
             .toFlowable()
             .flatMap(json -> Flowable.just(new SegmentsImpression(
-                    impression.getEpisodeId(), "mh_default", json, time.toInstant())));
+                    viewImpression.getEventId(), viewImpression.getOrgaId(), json, date.toInstant())));
   }
 
   /**
@@ -144,6 +151,6 @@ public final class MatomoUtils {
     }
     return correctResponse ?
             Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string()) :
-            Flowable.error(new InvalidMatomoResponse(x.code()));
+            Flowable.error(new InvalidHttpResponseException("Matomo HTTP error, code: " + x.code()));
   }
 }

@@ -19,12 +19,15 @@
  *
  */
 
-package org.opencastproject.matomoadapter;
+package org.opencastproject.matomoadapter.occlient;
 
-import org.slf4j.LoggerFactory;
+import org.opencastproject.matomoadapter.ClientConfigurationException;
+import org.opencastproject.matomoadapter.LimitInterceptor;
+import org.opencastproject.matomoadapter.Utils;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import org.slf4j.Logger;
+
+import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.cache.Cache;
@@ -44,10 +47,10 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
  */
 public final class OpencastClient {
 
-  private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(OpencastClient.class);
-
+  private final Logger logger;
   private final OpencastConfig opencastConfig;
-  private final OkHttpClient client;
+  private final OkHttpClient httpClient;
+  private final HashMap<String, OpencastExternalAPI> apiClients;
   private final Cache<String, String> cache;
 
   /**
@@ -55,8 +58,10 @@ public final class OpencastClient {
    *
    * @param opencastConfig Opencast configuration
    */
-  public OpencastClient(final OpencastConfig opencastConfig) {
+  public OpencastClient(final OpencastConfig opencastConfig, final Logger logger) {
+    this.logger = logger;
     this.opencastConfig = opencastConfig;
+    this.apiClients = new HashMap<>();
     // Initialize HTTP client for Opencast network requests
     final Interceptor interceptor = new HttpLoggingInterceptor();
     final OkHttpClient.Builder b = new OkHttpClient.Builder()
@@ -66,7 +71,7 @@ public final class OpencastClient {
             .readTimeout(opencastConfig.getTimeout(), TimeUnit.SECONDS)
             .writeTimeout(opencastConfig.getTimeout(), TimeUnit.SECONDS);
     // Add rate limiter in case network traffic needs to be throttled
-    this.client = opencastConfig.getRate() != 0 ?
+    this.httpClient = opencastConfig.getRate() != 0 ?
             b.addInterceptor(new LimitInterceptor(opencastConfig.getRate())).build() :
             b.build();
     // Initialize cache, if needed
@@ -82,33 +87,43 @@ public final class OpencastClient {
    *
    * @return Retrofit API
    */
-  private OpencastExternalAPI getClient() {
-    final Retrofit retrofit = new Retrofit.Builder()
-            .baseUrl(this.opencastConfig.getUri())
-            .client(this.client)
-            .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
-            .build();
-    return retrofit.create(OpencastExternalAPI.class);
+  private OpencastExternalAPI getClient(final String organization) {
+    return this.apiClients.computeIfAbsent(organization, ignored -> {
+      try {
+        final Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl(this.opencastConfig.getUri())
+                .client(this.httpClient)
+                .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
+                .build();
+        return retrofit.create(OpencastExternalAPI.class);
+      } catch (final IllegalArgumentException e) {
+        throw new ClientConfigurationException("Error in Opencast configuration: " + e.getMessage());
+      }
+    });
   }
 
   /**
    * Send a HTTP GET request to the Opencast Events API. The response contains general episode data
    * like title, creation date and seriesId.
    *
-   * @param organization Opencast organizationId
-   * @param episodeId Opencast episode/eventId
+   * @param orgaId Opencast eventId
+   * @param eventId Opencast episode/eventId
    * @return Response from GET request
    */
-  public Flowable<Response<ResponseBody>> getEventRequest(final String organization, final String episodeId) {
-    LOGGER.debug("OCREQUESTSTART, episode {}, organization {}", episodeId, organization);
-    return getClient().getEvent(episodeId, getAuthHeader());
+  Flowable<Response<ResponseBody>> getEventRequest(final String orgaId, final String eventId) {
+    this.logger.debug("OCREQUESTSTART, episode {}, organization {}", eventId, orgaId);
+    return getClient(orgaId).getEvent(eventId, getAuthHeader());
   }
 
   private String getAuthHeader() {
     return Utils.basicAuthHeader(this.opencastConfig.getUser(), this.opencastConfig.getPassword());
   }
 
-  public Cache<String, String> getCache() {
+  String getOrgaId() { return this.opencastConfig.getOrgaId(); }
+
+  Logger getLogger() { return this.logger; }
+
+  Cache<String, String> getCache() {
     return this.cache;
   }
 }

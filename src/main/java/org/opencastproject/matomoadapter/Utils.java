@@ -21,6 +21,10 @@
 
 package org.opencastproject.matomoadapter;
 
+import org.opencastproject.matomoadapter.influxdbclient.InfluxDBProcessor;
+import org.opencastproject.matomoadapter.influxdbclient.SegmentsPOJO;
+import org.opencastproject.matomoadapter.influxdbclient.SegmentsImpression;
+
 import org.influxdb.dto.Point;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -99,9 +103,10 @@ public final class Utils {
    * @return Point from Segments
    */
   public static Flowable<Point> checkSegments(final SegmentsImpression seg, final InfluxDBProcessor influxPro) {
-    final String episodeId = seg.getEpisodeId();
-
-    final String queryString = "SELECT * FROM %s.%s.segments_daily WHERE episodeId='" + episodeId + "'";
+    final String eventId = seg.getEventId();
+    final String orgaId = seg.getOrgaId();
+    final String queryString = "SELECT * FROM %s.%s.segments_daily WHERE eventId='" + eventId + "' AND "
+            + "organizationId='" + orgaId + "'";
     final List<SegmentsPOJO> segPojoList = influxPro.mapPojo(queryString, SegmentsPOJO.class);
     final JSONArray segJson = seg.getSegments();
 
@@ -118,7 +123,7 @@ public final class Utils {
       // Implication: "new" updates will always be written with the oldest timestamp of the episode.
       final Instant date = segPojoList.get(0).getTime();
 
-      return Flowable.just(new SegmentsImpression(seg.getEpisodeId(), seg.getOrganizationId(), combo, date).toPoint());
+      return Flowable.just(new SegmentsImpression(seg.getEventId(), seg.getOrgaId(), combo, date).toPoint());
     }
     // If no point in InfluxDB exists yet, return new point from SegmentsImpression
     return Flowable.just(seg.toPoint());

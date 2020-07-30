@@ -22,10 +22,10 @@
 package org.opencastproject.matomoadapter;
 
 /**
- * Represents an invalid HTTP response from the Matomo instance
+ * Represents an invalid HTTP response from a client instance
  */
-public class InvalidMatomoResponse extends RuntimeException {
-  public InvalidMatomoResponse(final int code) {
-    super("Matomo returned HTTP " + code);
+public class InvalidHttpResponseException extends RuntimeException {
+  public InvalidHttpResponseException(final String message) {
+    super(message);
   }
 }
