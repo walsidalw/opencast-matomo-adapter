@@ -74,16 +74,17 @@ public final class Main {
       final InfluxDBProcessor influxPro = new InfluxDBProcessor(configFile.getInfluxDBConfig(), LOGGER);
 
       // Schedule a task for updates
-      final TimerTask scheduledTask = new TimerTask() {
-        public void run() {
-          getStatisticsDaily(matClient, ocClient, influxPro, p);
-          LOGGER.info("Statistics updated on: {}", LocalDate.now());
-        }
-      };
       final Timer timer = new Timer("Timer");
       final long delay = 1000L;
       // Period between executions
       final long period = 1000L * 60L * 60L * 24L * configFile.getInterval();
+      final TimerTask scheduledTask = new TimerTask() {
+        public void run() {
+          getStatisticsDaily(matClient, ocClient, influxPro, p);
+          LOGGER.info("Statistics updated on: {}, Next update on: {}", LocalDate.now(),
+                  LocalDate.now().plusDays(configFile.getInterval()));
+        }
+      };
       timer.scheduleAtFixedRate(scheduledTask, delay, period);
 
     } catch (final ClientConfigurationException e) {

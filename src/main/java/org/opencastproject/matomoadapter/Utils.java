@@ -81,7 +81,7 @@ public final class Utils {
           // Update JSONObject with new values
           longer.getJSONObject(i).put("nb_plays", String.valueOf(plays));
           longer.getJSONObject(i).put("sum_plays", String.valueOf(sum));
-          longer.getJSONObject(i).put("play_rate", df.format(rate));
+          longer.getJSONObject(i).put("play_rate", Double.parseDouble(df.format(rate)));
         }
         return longer;
       } catch (final JSONException e) {
