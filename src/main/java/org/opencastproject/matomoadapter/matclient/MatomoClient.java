@@ -109,7 +109,7 @@ public final class MatomoClient {
     final String token = this.matomoConfig.getToken();
 
     // If no idSubtable was passed, it is assumed, that a list of all played episodes is requested
-    if(idSubtable == null) {
+    if (idSubtable == null) {
       this.logger.debug("MATOMOREQUESTSTART, method: getVideoResources, date: {}", date);
       return this.apiClient.getResources(idSite, token, date, "1",
               FILTER_PATTERN, "nb_plays", SHOW_COL, "");

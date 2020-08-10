@@ -22,9 +22,9 @@
 package org.opencastproject.matomoadapter;
 
 import org.opencastproject.matomoadapter.influxdbclient.InfluxDBProcessor;
+import org.opencastproject.matomoadapter.influxdbclient.ViewImpression;
 import org.opencastproject.matomoadapter.matclient.MatomoClient;
 import org.opencastproject.matomoadapter.matclient.MatomoUtils;
-import org.opencastproject.matomoadapter.influxdbclient.ViewImpression;
 import org.opencastproject.matomoadapter.occlient.OpencastClient;
 import org.opencastproject.matomoadapter.occlient.OpencastUtils;
 
@@ -111,8 +111,6 @@ public final class Main {
    */
   private static void getStatisticsDaily(final MatomoClient matClient, final OpencastClient ocClient,
                                          final InfluxDBProcessor influxPro, final Path p) {
-    // TEST TEST TEST TEST
-    final long start = System.nanoTime();
 
     try {
       // Check the file with last updated date. If no date is present set to yesterday
@@ -132,7 +130,7 @@ public final class Main {
         getStatistics(matClient, ocClient, influxPro, date);
         // Write current date into file
         final Writer fileWriter = new FileWriter(String.valueOf(p), false);
-        fileWriter.write(dateNow.minusDays(i-1).toString());
+        fileWriter.write(dateNow.minusDays(i - 1).toString());
         fileWriter.flush();
         fileWriter.close();
       }
@@ -140,9 +138,6 @@ public final class Main {
       LOGGER.error("File handling error: ", e);
       System.exit(ExitStatuses.FILE_HANDLING_ERROR);
     }
-    // TEST TEST TEST TEST
-    final long end = System.nanoTime();
-    System.out.println(end - start);
   }
 
   /**
@@ -191,9 +186,6 @@ public final class Main {
 
     // (Over-)Write segment statistics to InfluxDB
     influxPro.writeBatchReset();
-
-    // TEST TEST TEST TEST
-    System.out.println("Size of filtered list: " + seed.size());
   }
 
   /**
@@ -208,7 +200,7 @@ public final class Main {
     } else if (e instanceof ClientConfigurationException) {
       LOGGER.error("Client configuration error:", e);
       System.exit(ExitStatuses.CLIENT_CONFIGURATION_ERROR);
-    }else {
+    } else {
       LOGGER.error("Error:", e);
     }
     System.exit(ExitStatuses.UNKNOWN);

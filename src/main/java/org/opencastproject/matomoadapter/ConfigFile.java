@@ -99,7 +99,7 @@ public final class ConfigFile {
     final Properties parsed = new Properties();
 
     // Try parsing the config file. Write into Properties object
-    try (final FileReader reader = new FileReader(p.toFile())) {
+    try (FileReader reader = new FileReader(p.toFile())) {
       parsed.load(reader);
     } catch (final FileNotFoundException e) {
       LOGGER.error("Couldn't find config file \"{}\"", p);

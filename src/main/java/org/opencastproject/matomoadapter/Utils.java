@@ -22,8 +22,8 @@
 package org.opencastproject.matomoadapter;
 
 import org.opencastproject.matomoadapter.influxdbclient.InfluxDBProcessor;
-import org.opencastproject.matomoadapter.influxdbclient.SegmentsPOJO;
 import org.opencastproject.matomoadapter.influxdbclient.SegmentsImpression;
+import org.opencastproject.matomoadapter.influxdbclient.SegmentsPOJO;
 
 import org.influxdb.dto.Point;
 import org.json.JSONArray;

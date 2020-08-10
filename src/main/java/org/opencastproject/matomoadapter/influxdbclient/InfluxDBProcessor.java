@@ -29,6 +29,7 @@ import org.influxdb.dto.Point;
 import org.influxdb.dto.Pong;
 import org.influxdb.dto.Query;
 import org.influxdb.impl.InfluxDBMapper;
+
 import java.util.List;
 
 /**
@@ -40,15 +41,12 @@ public final class InfluxDBProcessor {
   private BatchPoints batch;
   private final InfluxDBConfig config;
   private final InfluxDB influxDB;
-  // TEST TEST TEST TEST
-  private int count;
 
   public InfluxDBProcessor(final InfluxDBConfig config, final org.slf4j.Logger logger) {
     this.logger = logger;
     this.influxDB = connect(config);
     this.config = config;
     this.batch = BatchPoints.database(config.getDb()).retentionPolicy(config.getRetentionPolicy()).build();
-    this.count = 0;
   }
 
   /**
@@ -70,8 +68,6 @@ public final class InfluxDBProcessor {
    * @param p Point, that needs to be added to the batch.
    */
   public void addToBatch(final Point p) {
-    // TEST TEST TEST TEST TEST
-    this.count++;
     this.batch.point(p);
   }
 
@@ -89,10 +85,6 @@ public final class InfluxDBProcessor {
     }
 
     this.influxDB.write(this.batch);
-
-    // TEST TEST TEST TEST TEST
-    System.out.println("Count of points in batch: " + this.count);
-    this.count = 0;
 
     this.batch = BatchPoints.database(this.config.getDb()).retentionPolicy(this.config.getRetentionPolicy()).build();
   }

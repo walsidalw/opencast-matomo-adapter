@@ -24,8 +24,8 @@ package org.opencastproject.matomoadapter.matclient;
 import org.opencastproject.matomoadapter.InvalidHttpResponseException;
 import org.opencastproject.matomoadapter.ParsingJsonSyntaxException;
 import org.opencastproject.matomoadapter.Utils;
-import org.opencastproject.matomoadapter.influxdbclient.ViewImpression;
 import org.opencastproject.matomoadapter.influxdbclient.SegmentsImpression;
+import org.opencastproject.matomoadapter.influxdbclient.ViewImpression;
 
 import org.json.JSONArray;
 import org.json.JSONException;

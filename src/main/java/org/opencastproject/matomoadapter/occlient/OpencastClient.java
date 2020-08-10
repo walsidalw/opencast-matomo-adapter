@@ -25,13 +25,13 @@ import org.opencastproject.matomoadapter.ClientConfigurationException;
 import org.opencastproject.matomoadapter.LimitInterceptor;
 import org.opencastproject.matomoadapter.Utils;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+
 import org.slf4j.Logger;
 
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
-
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 
 import devcsrj.okhttp3.logging.HttpLoggingInterceptor;
 import io.reactivex.Flowable;

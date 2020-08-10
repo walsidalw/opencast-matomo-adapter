@@ -1,3 +1,4 @@
 docs/test.properties
 .idea
 target/
+build/

@@ -24,9 +24,9 @@ package org.opencastproject.matomoadapter.influxdbclient;
 import org.influxdb.dto.Point;
 
 import java.time.Instant;
-import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
  * An Impression is an object containing all necessary metadata to write to the InfluxDB (immutable)
