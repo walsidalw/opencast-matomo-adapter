@@ -23,7 +23,6 @@ package org.opencastproject.matomoadapter.occlient;
 
 import org.opencastproject.matomoadapter.InvalidHttpResponseException;
 import org.opencastproject.matomoadapter.ParsingJsonSyntaxException;
-import org.opencastproject.matomoadapter.influxdbclient.ViewImpression;
 
 import com.google.common.cache.Cache;
 
@@ -31,12 +30,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.Objects;
 
 import io.reactivex.Flowable;
-import io.reactivex.annotations.NonNull;
 import okhttp3.ResponseBody;
 import retrofit2.Response;
 
@@ -45,6 +41,42 @@ import retrofit2.Response;
  */
 public final class OpencastUtils {
   private OpencastUtils() {
+  }
+
+  /**
+   * Request metadata for the episode and return the corresponding series ID
+   *
+   * @param logger Logger to use
+   * @param client Opencast HTTP client instance to use
+   * @param orgaId The episode's organization
+   * @param eventId The event ID
+   * @return Either a singleton <code>Flowable</code> with the resulting series ID, or an empty <code>Flowable</code>
+   */
+  public static Flowable<String> seriesForEvent(final Logger logger, final OpencastClient client,
+                                                 final String orgaId, final String eventId) {
+    final Cache<String, String> cache = client.getCache();
+    // Check if cache exists and then check, if the eventId is already stored
+    final String cachedId = cache != null ? cache.getIfPresent(eventId) : null;
+    // If the eventId already has an entry with a corresponding seriesId, return seriesId
+    if (cachedId != null)
+      return Flowable.just(cachedId);
+
+    logger.info("Retrieving series and start date for organization \"{}\", episode \"{}\"...", orgaId, eventId);
+
+    // Request event information from Opencast
+    return client
+            .getEventRequest(orgaId, eventId)
+            .concatMap(body -> OpencastUtils.checkResponseCode(logger, body, orgaId, eventId))
+            .map(OpencastUtils::seriesForEventJson)
+            // If available, store the seriesId in the cache
+            .concatMap(series -> {
+              if (!series.isEmpty()) {
+                if (cache != null)
+                  cache.put(eventId, series);
+                return Flowable.just(series);
+              }
+              return Flowable.empty();
+            });
   }
 
   /**
@@ -59,62 +91,6 @@ public final class OpencastUtils {
     } catch (final JSONException e) {
       throw new ParsingJsonSyntaxException(eventJson);
     }
-  }
-
-  /**
-   * Request metadata for the episode and return the corresponding series ID
-   *
-   * @param logger Logger to use
-   * @param client Opencast HTTP client instance to use
-   * @param orgaId The episode's organization
-   * @param eventId The episode ID
-   * @return Either a singleton <code>Flowable</code> with the resulting series ID, or an empty <code>Flowable</code>
-   */
-  private static Flowable<String> seriesForEvent(final Logger logger, final OpencastClient client,
-                                                 final String orgaId, final String eventId) {
-    final Cache<String, String> cache = client.getCache();
-    // Check if cache exists and then check, if the eventId is already stored
-    final String cachedId = cache != null ? cache.getIfPresent(eventId) : null;
-    // If the eventId already has an entry with a corresponding seriesId, return seriesId
-    if (cachedId != null)
-      return Flowable.just(cachedId);
-
-    logger.info("Retrieving series and start date for organization \"{}\", episode \"{}\"...", orgaId, eventId);
-
-    // Request event information from Opencast. If available, store the seriesId in the cache
-    return client
-            .getEventRequest(orgaId, eventId)
-            .concatMap(body -> OpencastUtils.checkResponseCode(logger, body, orgaId, eventId))
-            .map(OpencastUtils::seriesForEventJson)
-            .concatMap(series -> {
-              if (!series.isEmpty()) {
-                if (cache != null)
-                  cache.put(eventId, series);
-                return Flowable.just(series);
-              }
-              return Flowable.empty();
-            });
-  }
-
-  /**
-   * Parses the video URL to find the eventId. Currently the most common URL-types, coming from the
-   * Theodul and Paella player are supported. Live Streams do not contain an eventId.
-   *
-   * @param label Sub-URL of the video
-   * @return The eventID parsed from the URL
-   */
-  private static String getEventJson(final String label) {
-    if (!label.contains("engage") && !label.contains("static"))
-      return "";
-
-    final String sub = label.substring(1, 7);
-
-    if (sub.equals("engage")) {
-      return label.substring(label.lastIndexOf("?id=") + 4, label.lastIndexOf("?id=") + 40);
-    } else if (sub.equals("static")) {
-      return label.substring(label.lastIndexOf("yer/") + 4, label.lastIndexOf("yer/") + 40);
-    }
-    return "";
   }
 
   /**
@@ -143,77 +119,5 @@ public final class OpencastUtils {
       logger.debug("OCHTTPSUCCESS, episode {}, organization {}", eventId, orgaId);
       return Flowable.fromCallable(() -> Objects.requireNonNull(x.body()).string());
     }
-  }
-
-  /**
-   * Extracts eventId and statistical data from a JSON Object received from Matomo.
-   * Subsequently, the Opencast Event API is called for relevant series information (seriesID).
-   * Finally, all required data is saved and returned within an Impression Object.
-   *
-   * @param date Date for which the data is requested
-   * @param client Opencast client used for the event API request
-   * @param json JSON object representing one video and its statistics
-   * @return Completed Impression, ready to be converted to a InfluxDB point
-   */
-  public static Flowable<ViewImpression> makeImpression(final OpencastClient client, final JSONObject json,
-                                                        final OffsetDateTime date) {
-    try {
-      // Extract data from JSON
-      final String label = json.getString("label");
-      final String eventId = getEventJson(label);
-
-      // If the JSON label doesnt fit the pattern (e.g. Live Streams), the entry is evicted
-      if (eventId.isEmpty())
-        return Flowable.empty();
-
-      final String orgaId = client.getOrgaId();
-      final Logger logger = client.getLogger();
-      // Parse the remaining important data
-      final int plays = json.getInt("nb_plays");
-      final int visits = json.getInt("nb_unique_visitors_impressions");
-      final int finishes = json.getInt("nb_finishes");
-      final ArrayList<String> idSubtables = new ArrayList<>();
-      idSubtables.add(json.getString("idsubdatatable"));
-
-      // Create new Impression Flowable with series data from Opencast
-      return seriesForEvent(logger, client, orgaId, eventId)
-              .flatMap(series -> Flowable.just(new ViewImpression(eventId, orgaId,
-                      series, plays, visits, finishes, date.toInstant(), idSubtables)));
-
-    } catch (final JSONException e) {
-      throw new ParsingJsonSyntaxException(json.toString());
-    }
-  }
-
-  /**
-   * Checks all emitted Impressions for duplicates. Duplicates are merged into one Impression.
-   *
-   * @param newViewImpression Newly emitted Impression
-   */
-  @NonNull
-  public static ArrayList<ViewImpression> filterImpressions(final ArrayList<ViewImpression> oldList,
-                                                            final ViewImpression newViewImpression) {
-    final String eventId = newViewImpression.getEventId();
-    // If the list already contains an Impression with the same eventId as the new Impression, merge
-    // both into one Impression.
-    if (oldList.contains(newViewImpression)) {
-
-      final ViewImpression old = oldList.get(oldList.indexOf(newViewImpression));
-      // Merge stats of old and new Impression
-      final int plays = old.getPlays() + newViewImpression.getPlays();
-      final int visitors = old.getVisitors() + newViewImpression.getVisitors();
-      final int finishes = old.getFinishes() + newViewImpression.getFinishes();
-      final ArrayList<String> idSubtables = old.getSubtables();
-      idSubtables.addAll(newViewImpression.getSubtables());
-
-      final ViewImpression combined = new ViewImpression(eventId, old.getOrgaId(), old.getSeriesId(), plays,
-              visitors, finishes, old.getDate(), idSubtables);
-
-      oldList.set(oldList.indexOf(newViewImpression), combined);
-
-    } else {
-      oldList.add(newViewImpression);
-    }
-    return oldList;
   }
 }

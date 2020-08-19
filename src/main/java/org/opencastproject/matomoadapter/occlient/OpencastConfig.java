@@ -55,29 +55,29 @@ public final class OpencastConfig {
     this.timeout = timeout;
   }
 
-  public String getUri() {
+  String getUri() {
     return this.uri;
   }
 
-  public String getUser() {
+  String getUser() {
     return this.user;
   }
 
-  public String getPassword() {
+  String getPassword() {
     return this.password;
   }
 
-  public String getOrgaId() { return this.orgaId; }
+  String getOrgaId() { return this.orgaId; }
 
-  public int getCacheSize() {
+  int getCacheSize() {
     return this.cacheSize;
   }
 
-  public Duration getCacheDuration() {
+  Duration getCacheDuration() {
     return this.cacheDuration;
   }
 
-  public int getRate() { return this.rate; }
+  int getRate() { return this.rate; }
 
-  public int getTimeout() { return this.timeout; }
+  int getTimeout() { return this.timeout; }
 }

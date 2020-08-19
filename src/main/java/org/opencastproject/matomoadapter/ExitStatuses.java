@@ -60,6 +60,10 @@ public final class ExitStatuses {
    * There was an error with file reading/writing
    */
   public static final int FILE_HANDLING_ERROR = 9;
+  /**
+   * A log configuration file was given, but contained an error
+   */
+  public static final int LOG_FILE_CONFIGURATION_ERROR = 10;
 
   private ExitStatuses() {
   }

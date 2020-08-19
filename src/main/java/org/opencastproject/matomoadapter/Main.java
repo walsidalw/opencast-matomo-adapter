@@ -26,13 +26,13 @@ import org.opencastproject.matomoadapter.influxdbclient.ViewImpression;
 import org.opencastproject.matomoadapter.matclient.MatomoClient;
 import org.opencastproject.matomoadapter.matclient.MatomoUtils;
 import org.opencastproject.matomoadapter.occlient.OpencastClient;
-import org.opencastproject.matomoadapter.occlient.OpencastUtils;
 
 import org.influxdb.InfluxDBIOException;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,10 +45,14 @@ import java.util.TimerTask;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.encoder.PatternLayoutEncoder;
+import ch.qos.logback.classic.joran.JoranConfigurator;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
 import ch.qos.logback.core.Context;
+import ch.qos.logback.core.joran.spi.JoranException;
+import ch.qos.logback.core.util.StatusPrinter;
 import io.reactivex.Flowable;
 import io.reactivex.schedulers.Schedulers;
 
@@ -64,7 +68,8 @@ public final class Main {
     final ConfigFile configFile = ConfigFile.readFile(commandLine.getConfigFile());
     final Path p = configFile.getPathToDate();
     // Log configuration
-    configureLogManually();
+    configureLog(configFile);
+    LOGGER.info("Logging configured");
 
     try {
       // Initialize all clients (Opencast, Matomo)
@@ -80,8 +85,11 @@ public final class Main {
       final long period = 1000L * 60L * 60L * 24L * configFile.getInterval();
       final TimerTask scheduledTask = new TimerTask() {
         public void run() {
-          getStatisticsDaily(matClient, ocClient, influxPro, p);
-          LOGGER.info("Statistics updated on: {}, Next update on: {}", LocalDate.now(),
+          final long start = System.nanoTime();
+          getStatisticsPeriod(matClient, ocClient, influxPro, p);
+          final long end = System.nanoTime();
+          final long time = end - start;
+          LOGGER.info("Statistics updated on: {}, elapsed time: {}ns, Next update on: {}", LocalDate.now(), time,
                   LocalDate.now().plusDays(configFile.getInterval()));
         }
       };
@@ -109,7 +117,7 @@ public final class Main {
    * @param influxPro InfluxDBProcessor instance
    * @param p Path to file containing the last update date
    */
-  private static void getStatisticsDaily(final MatomoClient matClient, final OpencastClient ocClient,
+  private static void getStatisticsPeriod(final MatomoClient matClient, final OpencastClient ocClient,
                                          final InfluxDBProcessor influxPro, final Path p) {
 
     try {
@@ -154,16 +162,16 @@ public final class Main {
                                     final InfluxDBProcessor influxPro, final OffsetDateTime date) {
 
     // Used as seed in reduce method, as well as starting point in the second phase. After the first phase,
-    // it contains all the unique episode impressions from one day.
+    // it contains all the unique episode ViewImpressions from one day.
     final ArrayList<ViewImpression> seed = new ArrayList<>();
 
     // First, get all statistical data for all viewed episodes on given date
-    MatomoUtils.getViewed(matClient, date)
-            // Convert raw JSONObjects to Impressions
-            .flatMap(json -> OpencastUtils.makeImpression(ocClient, json, date)
+    MatomoUtils.getViewed(LOGGER, matClient, date)
+            // Convert raw JSONObjects to ViewImpressions
+            .flatMap(json -> ImpressionHandler.createViewImpression(ocClient, json, date)
                     .subscribeOn(Schedulers.io()))
-            // Filter out / unite duplicate impressions. Outgoing stream contains unique episode impressions
-            .reduce(seed, OpencastUtils::filterImpressions)
+            // Filter out / unite duplicate ViewImpressions. Outgoing stream contains unique episode ViewImpressions
+            .reduce(seed, ImpressionHandler::reduceViewImpressions)
             .flattenAsFlowable(impressions -> impressions)
             // Get Points from Impressions
             .flatMap(viewImpression -> Flowable.just(viewImpression)
@@ -171,25 +179,22 @@ public final class Main {
             // Add all points to InfluxDB batch, instead of writing each point separately
             .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
 
-    // Write view statistics to InfluxDB
-    influxPro.writeBatchReset();
-
-    // List of unique impressions tells us, for which episodes we need to fetch segment data
+    // List of unique ViewImpressions tells us, for which episodes we need to fetch segment data
     Flowable.just(seed).flatMapIterable(impressions -> impressions)
-            // Request segment statistics and build SegmentsPoints
-            .flatMap(viewImpression -> MatomoUtils.makeSegmentsImpression(matClient, viewImpression, date)
+            // Request segment statistics and build SegmentsImpressions
+            .flatMap(viewImpression -> ImpressionHandler.createSegmentsImpression(matClient, viewImpression, date)
                     .subscribeOn(Schedulers.io()))
             // If an InfluxDB point for an episode exists, overwrite it. Otherwise, insert point normally
             .flatMap(seg -> Utils.checkSegments(seg, influxPro)
                     .subscribeOn(Schedulers.io()))
             .blockingSubscribe(influxPro::addToBatch, Main::processError, 2048);
 
-    // (Over-)Write segment statistics to InfluxDB
-    influxPro.writeBatchReset();
+    // Write view statistics and (over-)write segment statistics to InfluxDB
+    influxPro.writeBatch();
   }
 
   /**
-   * Examine an exception, print a nice error message and exit
+   * Examine an exception, print a nice error message and exit.
    *
    * @param e The error to analyze
    */
@@ -204,6 +209,39 @@ public final class Main {
       LOGGER.error("Error:", e);
     }
     System.exit(ExitStatuses.UNKNOWN);
+  }
+
+  /**
+   * Configure the logger
+   *
+   * @param configFile Config file parameters
+   */
+  private static void configureLog(final ConfigFile configFile) {
+    if (configFile.getLogConfigurationFile() != null) {
+      configureLogFromFile(configFile.getLogConfigurationFile());
+    } else {
+      configureLogManually();
+    }
+  }
+
+  /**
+   * Read a logback configuration file, configure logging accordingly.
+   *
+   * @param logConfigurationFile A logback configuration file (typically an XML file)
+   */
+  private static void configureLogFromFile(final Path logConfigurationFile) {
+    final LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+    loggerContext.reset();
+    final JoranConfigurator configurator = new JoranConfigurator();
+    try (InputStream configStream = java.nio.file.Files.newInputStream(logConfigurationFile)) {
+      configurator.setContext(loggerContext);
+      configurator.doConfigure(configStream);
+    } catch (final IOException | JoranException e) {
+      LOGGER.error("Couldn't load logger configuration file \"{}\":", logConfigurationFile, e);
+      System.exit(ExitStatuses.LOG_FILE_CONFIGURATION_ERROR);
+    }
+    // This is logback being weird, see the official docs for an "explanation".
+    StatusPrinter.printInCaseOfErrorsOrWarnings(loggerContext);
   }
 
   /**

@@ -21,15 +21,15 @@
 
 package org.opencastproject.matomoadapter.occlient;
 
-import org.opencastproject.matomoadapter.ClientConfigurationException;
 import org.opencastproject.matomoadapter.LimitInterceptor;
-import org.opencastproject.matomoadapter.Utils;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 
 import org.slf4j.Logger;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -89,16 +89,12 @@ public final class OpencastClient {
    */
   private OpencastExternalAPI getClient(final String organization) {
     return this.apiClients.computeIfAbsent(organization, ignored -> {
-      try {
-        final Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl(this.opencastConfig.getUri())
-                .client(this.httpClient)
-                .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
-                .build();
-        return retrofit.create(OpencastExternalAPI.class);
-      } catch (final IllegalArgumentException e) {
-        throw new ClientConfigurationException("Error in Opencast configuration: " + e.getMessage());
-      }
+      final Retrofit retrofit = new Retrofit.Builder()
+              .baseUrl(this.opencastConfig.getUri())
+              .client(this.httpClient)
+              .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
+              .build();
+      return retrofit.create(OpencastExternalAPI.class);
     });
   }
 
@@ -116,12 +112,16 @@ public final class OpencastClient {
   }
 
   private String getAuthHeader() {
-    return Utils.basicAuthHeader(this.opencastConfig.getUser(), this.opencastConfig.getPassword());
+    return basicAuthHeader(this.opencastConfig.getUser(), this.opencastConfig.getPassword());
   }
 
-  String getOrgaId() { return this.opencastConfig.getOrgaId(); }
+  private static String basicAuthHeader(final String user, final String pw) {
+    final String userAndPass = user + ":" + pw;
+    final String userAndPassBase64 = Base64.getEncoder().encodeToString(userAndPass.getBytes(StandardCharsets.UTF_8));
+    return "Basic " + userAndPassBase64;
+  }
 
-  Logger getLogger() { return this.logger; }
+  public String getOrgaId() { return this.opencastConfig.getOrgaId(); }
 
   Cache<String, String> getCache() {
     return this.cache;

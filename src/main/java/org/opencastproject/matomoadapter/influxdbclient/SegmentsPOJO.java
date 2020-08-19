@@ -28,7 +28,8 @@ import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Model class (POJO) for InfluxDB mapper
+ * Model class (POJO) for InfluxDB mapper. Measurement name can not be changed dynamically. If you wish to
+ * store segments data under another measurement, change the following @Measurement annotation.
  */
 @SuppressWarnings("InstanceVariableMayNotBeInitialized")
 @Measurement(name = "segments_daily", timeUnit = TimeUnit.SECONDS)

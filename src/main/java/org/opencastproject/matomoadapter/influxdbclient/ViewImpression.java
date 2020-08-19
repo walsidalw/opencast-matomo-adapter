@@ -29,7 +29,7 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
- * An Impression is an object containing all necessary metadata to write to the InfluxDB (immutable)
+ * Contains all necessary metadata regarding view, plays and finishes statistics to write to the InfluxDB (immutable).
  */
 public final class ViewImpression {
   private final String eventId;

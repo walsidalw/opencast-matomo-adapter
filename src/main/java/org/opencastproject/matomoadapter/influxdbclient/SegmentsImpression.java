@@ -28,7 +28,7 @@ import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
 /**
- * An Impression is an object containing all necessary metadata to write to the InfluxDB (immutable)
+ * Contains all necessary metadata regarding segments statistics to write to the InfluxDB (immutable).
  */
 public final class SegmentsImpression {
   private final String eventId;

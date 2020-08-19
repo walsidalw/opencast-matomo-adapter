@@ -47,25 +47,25 @@ public final class InfluxDBConfig {
     this.logLevel = logLevel;
   }
 
-  public String getHost() {
+  String getHost() {
     return this.host;
   }
 
-  public String getUser() {
+  String getUser() {
     return this.user;
   }
 
-  public String getPassword() {
+  String getPassword() {
     return this.password;
   }
 
-  public String getDb() {
+  String getDb() {
     return this.db;
   }
 
-  public String getRetentionPolicy() { return this.retentionPolicy; }
+  String getRetentionPolicy() { return this.retentionPolicy; }
 
-  public String getLogLevel() {
+  String getLogLevel() {
     return this.logLevel;
   }
 }

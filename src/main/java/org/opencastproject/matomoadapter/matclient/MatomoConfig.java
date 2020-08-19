@@ -44,21 +44,21 @@ public final class MatomoConfig {
     this.timeout = timeout;
   }
 
-  public String getUri() {
+  String getUri() {
     return this.uri;
   }
 
-  public String getSiteId() {
+  String getSiteId() {
     return this.siteId;
   }
 
-  public String getToken() {
+  String getToken() {
     return this.token;
   }
 
-  public int getRate() {
+  int getRate() {
     return this.rate;
   }
 
-  public int getTimeout() { return this.timeout; }
+  int getTimeout() { return this.timeout; }
 }

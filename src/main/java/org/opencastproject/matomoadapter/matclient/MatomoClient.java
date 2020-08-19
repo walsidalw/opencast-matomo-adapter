@@ -21,7 +21,6 @@
 
 package org.opencastproject.matomoadapter.matclient;
 
-import org.opencastproject.matomoadapter.ClientConfigurationException;
 import org.opencastproject.matomoadapter.LimitInterceptor;
 
 import org.slf4j.Logger;
@@ -38,7 +37,7 @@ import retrofit2.Retrofit;
 import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
 
 /**
- * Manages Opencast's External API endpoint
+ * Manages Opencast's External API endpoint.
  */
 public final class MatomoClient {
   // Filter pattern for view statistics requests. Filters out episodes with 0 views.
@@ -75,21 +74,17 @@ public final class MatomoClient {
   }
 
   /**
-   * Create a separate endpoint (meaning HTTP interface) for each organization
+   * Create a separate endpoint (meaning HTTP interface) for each organization.
    *
    * @return A retrofit interface to be used to make HTTP calls
    */
-  private MatomoExternalAPI getClient() {
-    try {
-      final Retrofit retrofit = new Retrofit.Builder()
-              .baseUrl(this.matomoConfig.getUri())
-              .client(this.httpClient)
-              .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
-              .build();
-      return retrofit.create(MatomoExternalAPI.class);
-    } catch (final IllegalArgumentException e) {
-    throw new ClientConfigurationException("Error in Matomo configuration: " + e.getMessage());
-    }
+  private MatomoExternalAPI getClient() throws IllegalArgumentException {
+    final Retrofit retrofit = new Retrofit.Builder()
+            .baseUrl(this.matomoConfig.getUri())
+            .client(this.httpClient)
+            .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
+            .build();
+    return retrofit.create(MatomoExternalAPI.class);
   }
 
   /**
@@ -99,8 +94,9 @@ public final class MatomoClient {
    * If an idSubtable is provided, the response should contain video segments information for given date and
    * idSubtable.
    *
-   * @param date Date for which statistics are requested
+   * @param date Date for which statistics are requested. Expected format: YYYY-MM-DD
    * @param idSubtable Unique identifier of a resource on given date. If null, return all viewed episodes
+   * @param dimension Secondary dimension for request. Used in combination with idSubtable
    * @return Raw response to the request (JSONArray/String)
    */
   Flowable<Response<ResponseBody>> getResourcesRequest(final String date, final String idSubtable,
@@ -111,6 +107,7 @@ public final class MatomoClient {
     // If no idSubtable was passed, it is assumed, that a list of all played episodes is requested
     if (idSubtable == null) {
       this.logger.debug("MATOMOREQUESTSTART, method: getVideoResources, date: {}", date);
+      // If you wish to include episodes with 0 views, set FILTER_PATTERN to ""
       return this.apiClient.getResources(idSite, token, date, "1",
               FILTER_PATTERN, "nb_plays", SHOW_COL, "");
     }
@@ -120,6 +117,4 @@ public final class MatomoClient {
     return this.apiClient.getResources(idSite, token, date, idSubtable,
             "", "", "", dimension);
   }
-
-  Logger getLogger() { return this.logger; }
 }

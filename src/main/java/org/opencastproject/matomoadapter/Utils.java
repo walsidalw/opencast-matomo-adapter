@@ -29,10 +29,8 @@ import org.influxdb.dto.Point;
 import org.json.JSONArray;
 import org.json.JSONException;
 
-import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.List;
 
 import io.reactivex.Flowable;
@@ -59,17 +57,17 @@ public final class Utils {
     // If the new json array is empty, just return the unchanged JSONArray object
     if (json.length() > 2) {
       try {
-        final JSONArray freshJson = new JSONArray(json);
+        final JSONArray newJson = new JSONArray(json);
         // If the old JSONArray is empty, just return the new JSONArray from string json
         if (old.length() == 0)
-          return freshJson;
+          return newJson;
         // The longer JSONArray is always stored
-        final JSONArray longer = old.length() > freshJson.length() ? old : freshJson;
-        final JSONArray shorter = old.length() > freshJson.length() ? freshJson : old;
+        final JSONArray longer = old.length() > newJson.length() ? old : newJson;
+        final JSONArray shorter = old.length() > newJson.length() ? newJson : old;
         final DecimalFormat df = new DecimalFormat("#.##");
         // The sum doesn't change
         final int sum = Integer.parseInt(old.getJSONObject(0).getString("sum_plays")) +
-                Integer.parseInt(freshJson.getJSONObject(0).getString("sum_plays"));
+                Integer.parseInt(newJson.getJSONObject(0).getString("sum_plays"));
         // Update values for segments
         for (int i = 0; i < longer.length(); i++) {
           // If the shorter arrays length is reached, add 0
@@ -103,16 +101,18 @@ public final class Utils {
    * @return Point from Segments
    */
   public static Flowable<Point> checkSegments(final SegmentsImpression seg, final InfluxDBProcessor influxPro) {
+
+    final JSONArray segJson = seg.getSegments();
+    // If the given SegmentsImpression doesnt contain segment data, evict item from stream
+    if (segJson.length() == 0)
+      return Flowable.empty();
+
     final String eventId = seg.getEventId();
     final String orgaId = seg.getOrgaId();
+    // Prepare a query string for InfluxDB, leave two placeholders for DB and RP
     final String queryString = "SELECT * FROM %s.%s.segments_daily WHERE eventId='" + eventId + "' AND "
             + "organizationId='" + orgaId + "'";
     final List<SegmentsPOJO> segPojoList = influxPro.mapPojo(queryString, SegmentsPOJO.class);
-    final JSONArray segJson = seg.getSegments();
-
-    // If the given SegmentsImpression doesnt contain segment data, evict item from steam
-    if (segJson.length() == 0)
-      return Flowable.empty();
 
     // If an entry of segments for this episode exists
     if (!segPojoList.isEmpty()) {
@@ -127,11 +127,5 @@ public final class Utils {
     }
     // If no point in InfluxDB exists yet, return new point from SegmentsImpression
     return Flowable.just(seg.toPoint());
-  }
-
-  public static String basicAuthHeader(final String user, final String pw) {
-    final String userAndPass = user + ":" + pw;
-    final String userAndPassBase64 = Base64.getEncoder().encodeToString(userAndPass.getBytes(StandardCharsets.UTF_8));
-    return "Basic " + userAndPassBase64;
   }
 }

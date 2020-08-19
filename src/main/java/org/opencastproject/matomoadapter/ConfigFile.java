@@ -68,12 +68,14 @@ public final class ConfigFile {
   private static final String OPENCAST_TIMEOUT = "opencast.timeout";
   // Path to last date file
   private static final String ADAPTER_PATH_DATE = "adapter.date-file";
+  private static final String ADAPTER_LOG_CONFIGURATION_FILE = "adapter.log-configuration-file";
   private static final String ADAPTER_TIME_INTERVAL = "adapter.time-interval";
   // Config objects
   private final InfluxDBConfig influxDBConfig;
   private final MatomoConfig matomoConfig;
   private final OpencastConfig opencastConfig;
   private final Path lastDatePath;
+  private final Path logConfigurationFile;
   private final int interval;
 
   private ConfigFile(
@@ -81,11 +83,13 @@ public final class ConfigFile {
           final MatomoConfig matomoConfig,
           final OpencastConfig opencastConfig,
           final Path lastDatePath,
+          final Path logConfigurationFile,
           final int interval) {
     this.influxDBConfig = influxDBConfig;
     this.matomoConfig = matomoConfig;
     this.opencastConfig = opencastConfig;
     this.lastDatePath = lastDatePath;
+    this.logConfigurationFile = logConfigurationFile;
     this.interval = interval;
   }
 
@@ -110,7 +114,13 @@ public final class ConfigFile {
     }
 
     // Path to file with last update date
-    final Path pathToLastDate = Path.of(parsed.getProperty(ADAPTER_PATH_DATE));
+    final String pathToLastDateRaw = parsed.getProperty(ADAPTER_PATH_DATE);
+    if (pathToLastDateRaw == null) {
+      LOGGER.error("Error parsing config file \"{}\": {} must be specified", p, ADAPTER_PATH_DATE);
+      System.exit(ExitStatuses.CONFIG_FILE_PARSE_ERROR);
+    }
+    final Path pathToLastDate = Path.of(pathToLastDateRaw);
+    final String logConfigurationFile = parsed.getProperty(ADAPTER_LOG_CONFIGURATION_FILE);
     final int timeInterval = checkIntProperty(ADAPTER_TIME_INTERVAL, "1", parsed, p);
 
     // Initialized the ConfigFile Object with filled in properties for InfluxDB, Matomo and Opencast
@@ -118,6 +128,7 @@ public final class ConfigFile {
                           initMatomo(parsed, p),
                           initOpencast(parsed, p),
                           pathToLastDate,
+                          logConfigurationFile != null ? Path.of(logConfigurationFile) : null,
                           timeInterval);
   }
 
@@ -254,6 +265,10 @@ public final class ConfigFile {
   public OpencastConfig getOpencastConfig() { return this.opencastConfig; }
 
   public Path getPathToDate() { return this.lastDatePath; }
+
+  public Path getLogConfigurationFile() {
+    return this.logConfigurationFile;
+  }
 
   public int getInterval() { return this.interval; }
 }

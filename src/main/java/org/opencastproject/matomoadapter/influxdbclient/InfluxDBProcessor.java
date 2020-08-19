@@ -74,7 +74,7 @@ public final class InfluxDBProcessor {
   /**
    * Push the whole batch to InfluxDB and reset it afterwards.
    */
-  public void writeBatchReset() {
+  public void writeBatch() {
     try {
       final Pong pong = this.influxDB.ping();
       if (!pong.isGood()) {
@@ -85,7 +85,13 @@ public final class InfluxDBProcessor {
     }
 
     this.influxDB.write(this.batch);
+    resetBatch();
+  }
 
+  /**
+   * Reset the batch object.
+   */
+  private void resetBatch() {
     this.batch = BatchPoints.database(this.config.getDb()).retentionPolicy(this.config.getRetentionPolicy()).build();
   }
 

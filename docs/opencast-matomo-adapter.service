@@ -1,0 +1,13 @@
+[Unit]
+Description=Opencast Matomo Adapter
+After=syslog.target
+
+[Service]
+SyslogIdentifier=opencast-matomo-adapter
+ExecStart=/usr/bin/java -jar /opt/opencast-matomo-adapter/opencast-matomo-adapter-2.0.jar
+Type=simple
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
