@@ -168,10 +168,10 @@ public final class Main {
     // First, get all statistical data for all viewed episodes on given date
     MatomoUtils.getViewed(LOGGER, matClient, date)
             // Convert raw JSONObjects to ViewImpressions
-            .flatMap(json -> ImpressionHandler.createViewImpression(ocClient, json, date)
+            .flatMap(json -> ImpressionUtils.createViewImpression(ocClient, json, date)
                     .subscribeOn(Schedulers.io()))
             // Filter out / unite duplicate ViewImpressions. Outgoing stream contains unique episode ViewImpressions
-            .reduce(seed, ImpressionHandler::reduceViewImpressions)
+            .reduce(seed, ImpressionUtils::reduceViewImpressions)
             .flattenAsFlowable(impressions -> impressions)
             // Get Points from Impressions
             .flatMap(viewImpression -> Flowable.just(viewImpression)
@@ -182,7 +182,7 @@ public final class Main {
     // List of unique ViewImpressions tells us, for which episodes we need to fetch segment data
     Flowable.just(seed).flatMapIterable(impressions -> impressions)
             // Request segment statistics and build SegmentsImpressions
-            .flatMap(viewImpression -> ImpressionHandler.createSegmentsImpression(matClient, viewImpression, date)
+            .flatMap(viewImpression -> ImpressionUtils.createSegmentsImpression(matClient, viewImpression, date)
                     .subscribeOn(Schedulers.io()))
             // If an InfluxDB point for an episode exists, overwrite it. Otherwise, insert point normally
             .flatMap(seg -> Utils.checkSegments(seg, influxPro)

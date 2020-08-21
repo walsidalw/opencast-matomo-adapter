@@ -4,7 +4,7 @@ After=syslog.target
 
 [Service]
 SyslogIdentifier=opencast-matomo-adapter
-ExecStart=/usr/bin/java -jar /opt/opencast-matomo-adapter/opencast-matomo-adapter-2.0.jar
+ExecStart=/usr/bin/java -jar /opt/opencast-matomo-adapter/opencast-matomo-adapter-1.0.jar
 Type=simple
 Restart=on-failure
 RestartSec=10

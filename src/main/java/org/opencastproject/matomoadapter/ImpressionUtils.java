@@ -39,11 +39,11 @@ import java.util.ArrayList;
 import io.reactivex.Flowable;
 import io.reactivex.annotations.NonNull;
 
-public final class ImpressionHandler {
+public final class ImpressionUtils {
 
   private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
-  private ImpressionHandler() {
+  private ImpressionUtils() {
   }
 
   /**
@@ -138,7 +138,7 @@ public final class ImpressionHandler {
    */
   @NonNull
   public static ArrayList<ViewImpression> reduceViewImpressions(final ArrayList<ViewImpression> oldList,
-                                                            final ViewImpression newViewImpression) {
+                                                                final ViewImpression newViewImpression) {
     final String eventId = newViewImpression.getEventId();
     // If the list already contains an Impression with the same eventId as the new Impression, merge
     // both into one Impression
