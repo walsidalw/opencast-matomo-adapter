@@ -237,6 +237,7 @@ public final class Main {
       configurator.setContext(loggerContext);
       configurator.doConfigure(configStream);
     } catch (final IOException | JoranException e) {
+      configureLogManually();
       LOGGER.error("Couldn't load logger configuration file \"{}\":", logConfigurationFile, e);
       System.exit(ExitStatuses.LOG_FILE_CONFIGURATION_ERROR);
     }
