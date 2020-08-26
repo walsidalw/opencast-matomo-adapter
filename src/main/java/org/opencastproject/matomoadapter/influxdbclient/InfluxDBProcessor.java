@@ -96,6 +96,14 @@ public final class InfluxDBProcessor {
   }
 
   /**
+   * Close the connection to InfluxDB and delete batch.
+   */
+  public void closeConnection() {
+    this.influxDB.close();
+    this.batch = null;
+  }
+
+  /**
    * Connect and configure InfluxDB from a configuration
    *
    * @param config InfluxDB configuration

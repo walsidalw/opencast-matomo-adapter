@@ -21,6 +21,7 @@
 
 package org.opencastproject.matomoadapter;
 
+import org.opencastproject.matomoadapter.influxdbclient.InfluxDBConfig;
 import org.opencastproject.matomoadapter.influxdbclient.InfluxDBProcessor;
 import org.opencastproject.matomoadapter.influxdbclient.ViewImpression;
 import org.opencastproject.matomoadapter.matclient.MatomoClient;
@@ -75,8 +76,6 @@ public final class Main {
       // Initialize all clients (Opencast, Matomo)
       final MatomoClient matClient = new MatomoClient(configFile.getMatomoConfig(), LOGGER);
       final OpencastClient ocClient = new OpencastClient(configFile.getOpencastConfig(), LOGGER);
-      // Connect and configure InfluxDB
-      final InfluxDBProcessor influxPro = new InfluxDBProcessor(configFile.getInfluxDBConfig(), LOGGER);
 
       // Schedule a task for updates
       final Timer timer = new Timer("Timer");
@@ -86,25 +85,24 @@ public final class Main {
       final TimerTask scheduledTask = new TimerTask() {
         public void run() {
           final long start = System.nanoTime();
-          getStatisticsPeriod(matClient, ocClient, influxPro, p);
+          // (Re-)Start schedulers for parallelism
+          Schedulers.start();
+          // Fetch statistics for a given time period
+          getStatisticsPeriod(matClient, ocClient, configFile.getInfluxDBConfig(), p);
           final long end = System.nanoTime();
           final long time = end - start;
           LOGGER.info("Statistics updated on: {}, elapsed time: {}ns, Next update on: {}", LocalDate.now(), time,
                   LocalDate.now().plusDays(configFile.getInterval()));
+          // Shutdown schedulers to avoid memory leaks and CPU usage
+          Schedulers.shutdown();
+          // Run garbage collector once manually before sleep to free up memory
+          System.gc();
         }
       };
       timer.scheduleAtFixedRate(scheduledTask, delay, period);
-
     } catch (final ClientConfigurationException e) {
       LOGGER.error("Client configuration error: ", e);
       System.exit(ExitStatuses.CLIENT_CONFIGURATION_ERROR);
-    } catch (final InfluxDBIOException e) {
-      if (e.getCause() != null) {
-        LOGGER.error("InfluxDB error: " + e.getCause().getMessage());
-      } else {
-        LOGGER.error("InfluxDB error: " + e.getMessage());
-      }
-      System.exit(ExitStatuses.INFLUXDB_RUNTIME_ERROR);
     }
   }
 
@@ -114,13 +112,15 @@ public final class Main {
    *
    * @param matClient Matomo external API client instance
    * @param ocClient Opencast external API client instance
-   * @param influxPro InfluxDBProcessor instance
+   * @param influxConfig InfluxDBConfiguration instance
    * @param p Path to file containing the last update date
    */
   private static void getStatisticsPeriod(final MatomoClient matClient, final OpencastClient ocClient,
-                                         final InfluxDBProcessor influxPro, final Path p) {
+                                          final InfluxDBConfig influxConfig, final Path p) {
 
     try {
+      // Create InfluxDBProcessor instance from config file and connect to database
+      final InfluxDBProcessor influxPro = new InfluxDBProcessor(influxConfig, LOGGER);
       // Check the file with last updated date. If no date is present set to yesterday
       final LocalDate lastDate = Files.lines(p).findFirst().isPresent() ?
               LocalDate.parse(Files.lines(p).findFirst().get()) :
@@ -142,9 +142,18 @@ public final class Main {
         fileWriter.flush();
         fileWriter.close();
       }
+      // Close connection to InfluxDB
+      influxPro.closeConnection();
     } catch (final IOException e) {
       LOGGER.error("File handling error: ", e);
       System.exit(ExitStatuses.FILE_HANDLING_ERROR);
+    } catch (final InfluxDBIOException e) {
+      if (e.getCause() != null) {
+        LOGGER.error("InfluxDB error: " + e.getCause().getMessage());
+      } else {
+        LOGGER.error("InfluxDB error: " + e.getMessage());
+      }
+      System.exit(ExitStatuses.INFLUXDB_RUNTIME_ERROR);
     }
   }
 
