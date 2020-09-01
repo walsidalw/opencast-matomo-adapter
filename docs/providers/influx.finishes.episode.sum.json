@@ -1,0 +1,19 @@
+{
+  "id": "episode.finishes.sum.influx",
+  "title": "STATISTICS.TITLE.FINISHES_SUM",
+  "description": "STATISTICS.DESCRIPTION.FINISHES_SUM",
+  "resourceType": "EPISODE",
+  "sources": [{
+    "measurement": "autogen.impressions_daily",
+    "aggregation": "SUM",
+    "aggregationVariable": "finishes",
+    "resourceIdName": "eventId",
+    "resolutions": [
+      "DAILY",
+      "WEEKLY",
+      "MONTHLY",
+      "YEARLY"
+    ]
+  }],
+  "type": "timeseries"
+}

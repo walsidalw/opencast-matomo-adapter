@@ -1,0 +1,19 @@
+{
+  "id": "episode.plays.sum.influx",
+  "title": "STATISTICS.TITLE.PLAYS_SUM",
+  "description": "STATISTICS.DESCRIPTION.PLAYS_SUM",
+  "resourceType": "EPISODE",
+  "sources": [{
+    "measurement": "autogen.impressions_daily",
+    "aggregation": "SUM",
+    "aggregationVariable": "plays",
+    "resourceIdName": "eventId",
+    "resolutions": [
+      "DAILY",
+      "WEEKLY",
+      "MONTHLY",
+      "YEARLY"
+    ]
+  }],
+  "type": "timeseries"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "series.plays.sum.influx",
+  "title": "STATISTICS.TITLE.PLAYS_SUM",
+  "description": "STATISTICS.DESCRIPTION.PLAYS_SUM",
+  "resourceType": "SERIES",
+  "sources": [{
+    "measurement": "autogen.impressions_daily",
+    "aggregation": "SUM",
+    "aggregationVariable": "plays",
+    "resourceIdName": "seriesId",
+    "resolutions": [
+      "DAILY",
+      "WEEKLY",
+      "MONTHLY",
+      "YEARLY"
+    ]
+  }],
+  "type": "timeseries"
+}

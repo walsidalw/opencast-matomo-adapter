@@ -1,0 +1,19 @@
+{
+  "id": "series.visits.sum.influx",
+  "title": "STATISTICS.TITLE.VISITS_SUM",
+  "description": "STATISTICS.DESCRIPTION.VISITS_SUM",
+  "resourceType": "SERIES",
+  "sources": [{
+    "measurement": "autogen.impressions_daily",
+    "aggregation": "SUM",
+    "aggregationVariable": "visitors",
+    "resourceIdName": "seriesId",
+    "resolutions": [
+      "DAILY",
+      "WEEKLY",
+      "MONTHLY",
+      "YEARLY"
+    ]
+  }],
+  "type": "timeseries"
+}

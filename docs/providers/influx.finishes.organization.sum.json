@@ -1,0 +1,19 @@
+{
+  "id": "organization.finishes.sum.influx",
+  "title": "STATISTICS.TITLE.FINISHES_SUM",
+  "description": "STATISTICS.DESCRIPTION.FINISHES_SUM",
+  "resourceType": "ORGANIZATION",
+  "sources": [{
+    "measurement": "autogen.impressions_daily",
+    "aggregation": "SUM",
+    "aggregationVariable": "finishes",
+    "resourceIdName": "organizationId",
+    "resolutions": [
+      "DAILY",
+      "WEEKLY",
+      "MONTHLY",
+      "YEARLY"
+    ]
+  }],
+  "type": "timeseries"
+}
