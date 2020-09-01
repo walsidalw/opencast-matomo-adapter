@@ -57,7 +57,8 @@ public final class InfluxDBProcessor {
    * @return List of objects mapped from query result
    */
   public <T> List<T> mapPojo(final String query, final Class<T> clazz) {
-    final String q = String.format(query, this.config.getDb(), this.config.getRetentionPolicy());
+    final String rp = this.config.getRetentionPolicy() != null ? this.config.getRetentionPolicy() : "\"\"";
+    final String q = String.format(query, this.config.getDb(), rp);
     final InfluxDBMapper mapper = new InfluxDBMapper(this.influxDB);
     return mapper.query(new Query(q, this.config.getDb()), clazz);
   }
@@ -115,7 +116,8 @@ public final class InfluxDBProcessor {
       influxDB = InfluxDBFactory.connect(config.getHost(), config.getUser(), config.getPassword());
 
       influxDB.setDatabase(config.getDb());
-      influxDB.setRetentionPolicy(config.getRetentionPolicy());
+      if (config.getRetentionPolicy() != null)
+        influxDB.setRetentionPolicy(config.getRetentionPolicy());
       influxDB.enableBatch();
       if (config.getLogLevel().equals("debug")) {
         influxDB.setLogLevel(InfluxDB.LogLevel.FULL);
