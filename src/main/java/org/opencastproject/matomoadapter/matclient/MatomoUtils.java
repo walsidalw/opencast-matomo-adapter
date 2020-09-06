@@ -24,13 +24,15 @@ package org.opencastproject.matomoadapter.matclient;
 import org.opencastproject.matomoadapter.InvalidHttpResponseException;
 import org.opencastproject.matomoadapter.ParsingJsonSyntaxException;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
+
 import org.slf4j.Logger;
 
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.Objects;
 
 import io.reactivex.Flowable;
@@ -53,15 +55,17 @@ public final class MatomoUtils {
    * @param date Date of request
    * @return Returns Flowable with JSONObjects containing episode statistics
    */
-  public static Flowable<JSONObject> getViewed(final Logger logger, final MatomoClient client,
+  public static Flowable<JsonObject> getViewed(final Logger logger, final MatomoClient client,
                                                final OffsetDateTime date) {
     logger.info("Retrieving viewed episodes for date: {}", date);
 
     return getResources(logger, client, date, null, null)
-            // Convert response body to JSONObjects List
+            // Convert response body to JsonArray
             .map(MatomoUtils::getViewedJson)
-            // Emit each item from List
-            .flatMapIterable(json -> json);
+            // Split JsonArray into individual JsonElements
+            .flatMapIterable(json -> json)
+            // Cast to JsonObjects
+            .map(JsonElement::getAsJsonObject);
   }
 
   /**
@@ -107,17 +111,10 @@ public final class MatomoUtils {
    * @param json Response body from Matomo API request
    * @return ArrayList with separate JSONObjects containing statistics for each episode
    */
-  private static ArrayList<JSONObject> getViewedJson(final String json) {
+  private static JsonArray getViewedJson(final String json) {
     try {
-      final JSONArray jArray = new JSONArray(json);
-      final ArrayList<JSONObject> list = new ArrayList<>();
-      if (jArray.length() != 0) {
-        for (int i = 0; i < jArray.length(); i++) {
-          list.add(jArray.getJSONObject(i));
-        }
-      }
-      return list;
-    } catch (final JSONException e) {
+      return new Gson().fromJson(json, JsonArray.class);
+    } catch (final JsonSyntaxException e) {
       throw new ParsingJsonSyntaxException(json);
     }
   }

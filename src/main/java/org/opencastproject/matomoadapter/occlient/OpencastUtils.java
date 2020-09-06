@@ -25,12 +25,14 @@ import org.opencastproject.matomoadapter.InvalidHttpResponseException;
 import org.opencastproject.matomoadapter.ParsingJsonSyntaxException;
 
 import com.google.common.cache.Cache;
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import io.reactivex.Flowable;
 import okhttp3.ResponseBody;
@@ -70,10 +72,10 @@ public final class OpencastUtils {
             .map(OpencastUtils::seriesForEventJson)
             // If available, store the seriesId in the cache
             .concatMap(series -> {
-              if (!series.isEmpty()) {
+              if (series.isPresent()) {
                 if (cache != null)
-                  cache.put(eventId, series);
-                return Flowable.just(series);
+                  cache.put(eventId, series.get());
+                return Flowable.just(series.get());
               }
               return Flowable.empty();
             });
@@ -85,10 +87,18 @@ public final class OpencastUtils {
    * @param eventJson The returned JSON as <code>String</code>
    * @return SeriesId, if it exists
    */
-  private static String seriesForEventJson(final String eventJson) {
+  @SuppressWarnings("unchecked")
+  private static Optional<String> seriesForEventJson(final String eventJson) {
     try {
-      return new JSONObject(eventJson).getString("is_part_of");
-    } catch (final JSONException e) {
+      final Map<String, Object> m = new Gson().fromJson(eventJson, Map.class);
+      if (m != null) {
+        final Object isPartOf = m.get("is_part_of");
+        if (isPartOf instanceof String) {
+          return Optional.of((String) isPartOf);
+        }
+      }
+      return Optional.empty();
+    } catch (final JsonSyntaxException e) {
       throw new ParsingJsonSyntaxException(eventJson);
     }
   }

@@ -25,9 +25,11 @@ import org.opencastproject.matomoadapter.influxdbclient.InfluxDBProcessor;
 import org.opencastproject.matomoadapter.influxdbclient.SegmentsImpression;
 import org.opencastproject.matomoadapter.influxdbclient.SegmentsPOJO;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonSyntaxException;
+
 import org.influxdb.dto.Point;
-import org.json.JSONArray;
-import org.json.JSONException;
 
 import java.text.DecimalFormat;
 import java.time.Instant;
@@ -53,36 +55,36 @@ public final class Utils {
    * @return Unified JSONArray with updated values
    */
   @NonNull
-  public static JSONArray combineSegmentJson(final JSONArray old, @NonNull final String json) {
+  public static JsonArray combineSegmentJson(final JsonArray old, @NonNull final String json) {
     // If the new json array is empty, just return the unchanged JSONArray object
     if (json.length() > 2) {
       try {
-        final JSONArray newJson = new JSONArray(json);
+        final JsonArray newJson = new Gson().fromJson(json, JsonArray.class);
         // If the old JSONArray is empty, just return the new JSONArray from string json
-        if (old.length() == 0)
+        if (old.size() == 0)
           return newJson;
         // The longer JSONArray is always stored
-        final JSONArray longer = old.length() > newJson.length() ? old : newJson;
-        final JSONArray shorter = old.length() > newJson.length() ? newJson : old;
+        final JsonArray longer = old.size() > newJson.size() ? old : newJson;
+        final JsonArray shorter = old.size() > newJson.size() ? newJson : old;
         final DecimalFormat df = new DecimalFormat("#.##");
         // The sum doesn't change
-        final int sum = Integer.parseInt(old.getJSONObject(0).getString("sum_plays")) +
-                Integer.parseInt(newJson.getJSONObject(0).getString("sum_plays"));
+        final int sum = old.get(0).getAsJsonObject().get("sum_plays").getAsInt() +
+                newJson.get(0).getAsJsonObject().get("sum_plays").getAsInt();
         // Update values for segments
-        for (int i = 0; i < longer.length(); i++) {
+        for (int i = 0; i < longer.size(); i++) {
           // If the shorter arrays length is reached, add 0
-          final int playsShort = i < shorter.length() ?
-                  Integer.parseInt(shorter.getJSONObject(i).getString("nb_plays")) : 0;
-          final int plays = Integer.parseInt(longer.getJSONObject(i).getString("nb_plays")) + playsShort;
+          final int playsShort = i < shorter.size() ?
+                  old.get(i).getAsJsonObject().get("nb_plays").getAsInt() : 0;
+          final int plays = longer.get(i).getAsJsonObject().get("nb_plays").getAsInt() + playsShort;
           final double rate = (double) plays / (double) sum;
 
           // Update JSONObject with new values
-          longer.getJSONObject(i).put("nb_plays", String.valueOf(plays));
-          longer.getJSONObject(i).put("sum_plays", String.valueOf(sum));
-          longer.getJSONObject(i).put("play_rate", Double.parseDouble(df.format(rate)));
+          longer.get(i).getAsJsonObject().addProperty("nb_plays", String.valueOf(plays));
+          longer.get(i).getAsJsonObject().addProperty("sum_plays", String.valueOf(sum));
+          longer.get(i).getAsJsonObject().addProperty("play_rate", Double.parseDouble(df.format(rate)));
         }
         return longer;
-      } catch (final JSONException e) {
+      } catch (final JsonSyntaxException e) {
         throw new ParsingJsonSyntaxException(json);
       }
     }
@@ -102,9 +104,9 @@ public final class Utils {
    */
   public static Flowable<Point> checkSegments(final SegmentsImpression seg, final InfluxDBProcessor influxPro) {
 
-    final JSONArray segJson = seg.getSegments();
+    final JsonArray segJson = seg.getSegments();
     // If the given SegmentsImpression doesnt contain segment data, evict item from stream
-    if (segJson.length() == 0)
+    if (segJson.size() == 0)
       return Flowable.empty();
 
     final String eventId = seg.getEventId();
@@ -117,7 +119,7 @@ public final class Utils {
     // If an entry of segments for this episode exists
     if (!segPojoList.isEmpty()) {
       // Unification of old segments data from DB and new data
-      final JSONArray combo = Utils.combineSegmentJson(segJson, segPojoList.get(0).getSegments());
+      final JsonArray combo = Utils.combineSegmentJson(segJson, segPojoList.get(0).getSegments());
 
       // In order to overwrite an entry, the new point needs to have the same timestamp and tags.
       // Implication: "new" updates will always be written with the oldest timestamp of the episode.

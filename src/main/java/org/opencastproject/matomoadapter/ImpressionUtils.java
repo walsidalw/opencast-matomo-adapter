@@ -28,9 +28,10 @@ import org.opencastproject.matomoadapter.matclient.MatomoUtils;
 import org.opencastproject.matomoadapter.occlient.OpencastClient;
 import org.opencastproject.matomoadapter.occlient.OpencastUtils;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
+
 import org.slf4j.LoggerFactory;
 
 import java.time.OffsetDateTime;
@@ -56,11 +57,11 @@ public final class ImpressionUtils {
    * @param json JSON object representing one video and its statistics
    * @return Completed Impression, ready to be converted to a InfluxDB point
    */
-  public static Flowable<ViewImpression> createViewImpression(final OpencastClient ocClient, final JSONObject json,
+  public static Flowable<ViewImpression> createViewImpression(final OpencastClient ocClient, final JsonObject json,
                                                               final OffsetDateTime date) {
     try {
       // Extract eventId from JSON
-      final String label = json.getString("label");
+      final String label = json.get("label").getAsString();
       final String eventId = getEventJson(label);
 
       // If the JSON label doesnt fit the pattern (e.g. Live Streams), the entry is evicted
@@ -69,18 +70,18 @@ public final class ImpressionUtils {
 
       final String orgaId = ocClient.getOrgaId();
       // Parse the remaining important data from JSON
-      final int plays = json.getInt("nb_plays");
-      final int visits = json.getInt("nb_unique_visitors_impressions");
-      final int finishes = json.getInt("nb_finishes");
+      final int plays = json.get("nb_plays").getAsInt();
+      final int visits = json.get("nb_unique_visitors_impressions").getAsInt();
+      final int finishes = json.get("nb_finishes").getAsInt();
       final ArrayList<String> idSubtables = new ArrayList<>();
-      idSubtables.add(json.getString("idsubdatatable"));
+      idSubtables.add(json.get("idsubdatatable").getAsString());
 
       // Create new ViewImpression with series data from Opencast
       return OpencastUtils.seriesForEvent(LOGGER, ocClient, orgaId, eventId)
               .flatMap(series -> Flowable.just(new ViewImpression(eventId, orgaId,
                       series, plays, visits, finishes, date.toInstant(), idSubtables)));
 
-    } catch (final JSONException e) {
+    } catch (final JsonSyntaxException e) {
       throw new ParsingJsonSyntaxException(json.toString());
     }
   }
@@ -97,7 +98,7 @@ public final class ImpressionUtils {
   public static Flowable<SegmentsImpression> createSegmentsImpression(final MatomoClient matClient,
                                                                       final ViewImpression viewImpression,
                                                                       final OffsetDateTime date) {
-    final JSONArray seed = new JSONArray();
+    final JsonArray seed = new JsonArray();
 
     return Flowable.just(viewImpression.getSubtables()).flatMapIterable(imp -> imp)
             // For each subtable request segment data

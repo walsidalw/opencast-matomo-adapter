@@ -21,8 +21,9 @@
 
 package org.opencastproject.matomoadapter.influxdbclient;
 
+import com.google.gson.JsonArray;
+
 import org.influxdb.dto.Point;
-import org.json.JSONArray;
 
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
@@ -33,13 +34,13 @@ import java.util.concurrent.TimeUnit;
 public final class SegmentsImpression {
   private final String eventId;
   private final String orgaId;
-  private final JSONArray segments;
+  private final JsonArray segments;
   private final Instant date;
 
   public SegmentsImpression(
           final String eventId,
           final String orgaId,
-          final JSONArray segments,
+          final JsonArray segments,
           final Instant date) {
     this.eventId = eventId;
     this.orgaId = orgaId;
@@ -65,7 +66,7 @@ public final class SegmentsImpression {
     return this.eventId;
   }
 
-  public JSONArray getSegments() { return this.segments; }
+  public JsonArray getSegments() { return this.segments; }
 
   public String getOrgaId() { return this.orgaId; }
 }
