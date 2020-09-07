@@ -130,7 +130,7 @@ In order to enable user tracking you have to set up the according [player config
 
 ### InfluxDB integration ###
 
-If you wish to integrate general metrics statistics (views, plays, visitors) in Opencast, see the [statistics integration page](https://docs.opencast.org/r/8.x/admin/#configuration/admin-ui/statistics/). Some *Statistics Provider* example files are located in `docs/providers`. Alternatively use [opencast-stats-app]() to view generated statistics.
+If you wish to integrate general metrics statistics (views, plays, visitors) in Opencast, see the [statistics integration page](https://docs.opencast.org/r/8.x/admin/#configuration/admin-ui/statistics/). Some *Statistics Provider* example files are located in `docs/providers`. Alternatively use [opencast-stats-app](https://github.com/walsidalw/opencast-stats-app) to view generated statistics.
 
 ## InfluxDB ##
 
